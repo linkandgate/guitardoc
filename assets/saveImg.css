@@ -1,0 +1,36 @@
+/* ---------- 按钮样式 ---------- */
+.save-btn-wrapper {
+    margin-top: 2.5rem;
+    display: flex;
+    justify-content: center;
+}
+
+button {
+    background: #1e6f5c;
+    color: white;
+    border: none;
+    padding: 12px 32px;
+    border-radius: 40px;
+    font-size: 1.1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: 0.2s;
+    box-shadow: 0 4px 12px rgba(30, 111, 92, 0.3);
+}
+
+button:hover {
+    background: #0e5a48;
+    transform: scale(1.02);
+}
+
+/* 响应式 */
+@media (max-width: 860px) {
+    .chord-grid {
+        grid-template-columns: 1fr;
+        gap: 1.5rem;
+    }
+
+    .page-header h1 {
+        font-size: 2.2rem;
+    }
+}

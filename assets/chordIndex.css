@@ -1,0 +1,267 @@
+/* ---------- 全局重置 & 基础 ---------- */
+
+#app
+#app::before,
+#app::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+#app {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    background: #f5f7fb;
+    min-height: 100vh;
+    padding: 2rem 1.5rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.container {
+    width: 100%;
+}
+
+/* ---------- 标题 ---------- */
+.page-header {
+    text-align: center;
+    margin-bottom: 2.8rem;
+}
+
+.page-header h1 {
+    font-size: 2.8rem;
+    font-weight: 700;
+    color: #1a1a2e;
+    letter-spacing: -0.02em;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+}
+
+.page-header h1 span {
+    color: #2d7aff;
+}
+
+.page-header p {
+    color: #5a5a7a;
+    font-size: 1.05rem;
+    margin-top: 0.4rem;
+    letter-spacing: 0.3px;
+}
+
+.page-header p .badge {
+    display: inline-block;
+    background: rgba(45, 122, 255, 0.10);
+    color: #2d7aff;
+    padding: 0.1rem 0.9rem;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    margin: 0 0.2rem;
+}
+
+.page-header p .badge.minor {
+    background: rgba(255, 80, 120, 0.10);
+    color: #d94a7a;
+}
+
+.page-header p .badge.dominant {
+    background: rgba(255, 160, 0, 0.10);
+    color: #b87c00;
+}
+
+/* ---------- 和弦网格：双列 ---------- */
+.chord-grid {
+    display: grid;
+    /* grid-template-columns: repeat(3, 2fr); */
+    gap: 1.8rem;
+    justify-items: center;
+}
+
+/* ---------- 和弦卡片 ---------- */
+.chord-card {
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    border-radius: 28px;
+    padding: 2.2rem 2rem 2rem;
+    box-shadow:
+        0 8px 30px rgba(0, 0, 0, 0.06),
+        0 2px 8px rgba(0, 0, 0, 0.03),
+        inset 0 1px 0 rgba(255, 255, 255, 0.7);
+    transition: transform 0.25s ease, box-shadow 0.3s ease;
+    width: 100%;
+    max-width: 800px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    border: 1px solid rgba(255, 255, 255, 0.5);
+}
+
+.chord-card:hover {
+    transform: translateY(-6px);
+    box-shadow:
+        0 16px 48px rgba(0, 0, 0, 0.10),
+        0 4px 12px rgba(0, 0, 0, 0.04);
+    background: rgba(255, 255, 255, 0.95);
+}
+
+/* 和弦名称 */
+.chord-name {
+    font-size: 2.8rem;
+    font-weight: 700;
+    color: #1a1a2e;
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+}
+
+/* 别名 */
+.chord-alias {
+    font-size: 1.0rem;
+    color: #6a6a8a;
+    font-weight: 500;
+    margin-top: 0.1rem;
+    letter-spacing: 0.2px;
+    background: rgba(0, 0, 0, 0.02);
+    padding: 0.1rem 0.8rem;
+    border-radius: 12px;
+    border: 1px solid rgba(0, 0, 0, 0.03);
+}
+
+/* 音符 */
+.chord-notes {
+    font-size: 1.3rem;
+    font-weight: 600;
+    color: #1a1a3a;
+    margin-top: 0.7rem;
+    padding: 0.3rem 1.2rem;
+    background: rgba(45, 122, 255, 0.05);
+    border-radius: 30px;
+    letter-spacing: 0.5px;
+}
+
+/* 指法（音程） */
+.chord-intervals {
+    margin-top: 0.8rem;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.5rem 1rem;
+}
+
+.interval-tag {
+    font-size: 1.0rem;
+    font-weight: 500;
+    color: #3a3a5a;
+    background: rgba(0, 0, 0, 0.03);
+    padding: 0.25rem 0.9rem;
+    border-radius: 20px;
+    border: 1px solid rgba(0, 0, 0, 0.04);
+    font-feature-settings: "tnum";
+}
+
+
+.interval-tag.color-1 {
+    color: #ff0000;
+    background: rgba(45, 122, 255, 0.08);
+    border-color: rgba(45, 122, 255, 0.12);
+}
+
+.interval-tag.color-2 {
+    color: #4e1e81
+}
+
+.interval-tag.color-3 {
+    color: #413992
+}
+
+.interval-tag.color-4 {
+    color: #3f5cab
+}
+
+.interval-tag.color-5 {
+    color: #447cbf
+}
+
+.interval-tag.color-6 {
+    color: #4d95be
+}
+
+.interval-tag.color-7 {
+    color: #5ba7a6
+}
+
+.interval-tag.color-8 {
+    color: #6eb388
+}
+
+.interval-tag.color-9 {
+    color: #83ba6d
+}
+
+.interval-tag.color-10 {
+    color: #9cbe5a
+}
+
+.interval-tag.color-11 {
+    color: #b4bd4c
+}
+
+.interval-tag.color-12 {
+    color: #cab842
+}
+
+.interval-tag.color-13 {
+    color: #dbab3b
+}
+
+.interval-tag.color-14 {
+    color: #e59435
+}
+
+.interval-tag.color-15 {
+    color: #e7732f
+}
+
+.interval-tag.color-16 {
+    color: #8b6860
+}
+
+.interval-tag.color-17 {
+    color: #d92120
+}
+
+.interval-tag.color-18 {
+    color: #851375
+}
+
+.interval-tag.color-19 {
+    color: #a8d370
+}
+
+.interval-tag.color-20 {
+    color: #b3b9ac
+}
+
+.interval-tag.color-21 {
+    color: #5f9621
+}
+
+.interval-tag.color-22 {
+    color: #77cf11
+}
+
+.interval-tag.color-23 {
+    color: #618636
+}
+
+.interval-tag.color-24 {
+    color: #201e94
+}
+
+
+.text-muted {
+    color: #8a8aaa;
+}

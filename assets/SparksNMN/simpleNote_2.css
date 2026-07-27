@@ -1,0 +1,39 @@
+html {
+        margin: 0;
+        padding: 0;
+        background-color: #FFF;
+    }
+body {
+    margin: 0;
+    padding: 0 8px;
+}
+.preview-container {
+    width: 100%;
+    max-width: 1000px;
+    padding: 16px 0;
+    margin: 0 auto;
+}
+@page{
+    margin-left: 0cm;
+    margin-right: 0cm;
+    margin-top: 8.0vw;
+    margin-bottom: 8.0vw;
+}
+@media print {
+    html, body {
+        padding: 0;
+        margin: 0;
+    }
+    .preview-container {
+        width: unset;
+        max-width: unset;
+        padding: 0;
+        margin: 0;
+    }
+    .wcl-equifield-field[data-label=pageSeparator] {
+        display: none
+    }
+}
+.SparksNMN-validation {
+    display: none;
+}

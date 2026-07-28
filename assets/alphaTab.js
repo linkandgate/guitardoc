@@ -40791,11 +40791,11 @@
                 let css = `
             @font-face {
                 font-family: 'alphaTab';
-                 src: url('/guitardoc/assets/Bravura.eot');
-                 src: url('/guitardoc/assets/Bravura.eot?#iefix') format('embedded-opentype')
-                      , url('/guitardoc/assets/Bravura.woff') format('woff')
-                      , url('/guitardoc/assets/Bravura.otf') format('opentype')
-                      , url('/guitardoc/assets/Bravura.svg') format('svg');
+                 src: url('../../assets/fonts/Bravura.eot');
+                 src: url('../../assets/fonts/Bravura.eot?#iefix') format('embedded-opentype')
+                      , url('../../assets/fonts/Bravura.woff') format('woff')
+                      , url('../../assets/fonts/Bravura.otf') format('opentype')
+                      , url('../../assets/fonts/Bravura.svg') format('svg');
                  font-weight: normal;
                  font-style: normal;
             }

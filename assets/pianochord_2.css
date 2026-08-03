@@ -51,11 +51,9 @@
     max-width: 100%;
     text-align: center;
     white-space: nowrap;
-    overflow-x: auto;
-    padding-bottom: 0.3rem;
     display: flex;
+    padding-bottom: 0.3rem;
     align-items: flex-start;
-    justify-content: center;
     /* 居中键盘 */
 }
 
@@ -92,7 +90,7 @@
 
 .keyboard-container .keyboard-key.black {
     z-index: 1;
-    width: 2.25rem;
+    width: 2rem;
     height: 6rem;
     color: #a8a8a8;
     background-color: #333;
@@ -181,7 +179,8 @@
 }
 
 /* ===== 播放按钮样式 ===== */
-.play-scale-btn, .play-together-btn {
+.play-scale-btn,
+.play-together-btn {
     margin-top: 0.2rem;
     padding: 0.4rem 1.2rem;
     background: #da1e1e;
@@ -198,16 +197,21 @@
     flex-shrink: 0;
 }
 
-.play-scale-btn:hover, .play-together-btn:hover {
+.play-scale-btn:hover,
+.play-together-btn:hover {
     background: #d4852a;
 }
 
-.play-scale-btn:active , .play-together-btn:active {
+.play-scale-btn:active,
+.play-together-btn:active {
     transform: scale(0.96);
 }
 
+
+
 /* ===== 响应式 ===== */
-@media (max-width: 820px) {
+/* 针对屏幕宽度 ≤ 1000px 的设备（典型手机/平板竖屏） */
+@media screen and (max-width: 1000px) {
     .wrapper {
         flex-direction: column;
         align-items: stretch;
@@ -216,13 +220,12 @@
     }
 
     .chordDetail-container {
-        flex: 1 1 auto;
+        flex: 0 0 auto;
         max-width: 100%;
         max-height: none;
     }
 
     .keyboard-container {
-        max-width: 100%;
         overflow-x: auto;
     }
 
@@ -230,11 +233,10 @@
         margin-right: 0.5rem;
         font-size: 2.2rem;
     }
-}
 
-@media (max-width: 480px) {
     .chordDetail-container .information-container h1 {
         font-size: 1.8rem;
+
     }
 
     .keyboard-container .keyboard-key.white {

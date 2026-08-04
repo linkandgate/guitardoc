@@ -47,13 +47,12 @@
 
 /* ===== 右侧：键盘容器 ===== */
 .keyboard-container {
-    flex: 0 0 auto;
-    max-width: 100%;
-    text-align: center;
+    /* flex: 0 0 auto;
+    text-align: center; */
     white-space: nowrap;
-    display: flex;
+    /* display: flex;
     padding-bottom: 0.3rem;
-    align-items: flex-start;
+    align-items: flex-start; */
     /* 居中键盘 */
 }
 
@@ -241,16 +240,40 @@
 
     .keyboard-container .keyboard-key.white {
         width: 2rem;
-        height: 10rem;
+        height: 8rem;
     }
 
     .keyboard-container .keyboard-key.black {
         width: 1.6rem;
-        height: 7rem;
-        margin-left: -0.8rem;
+        height: 5rem;
+        margin-left: -0.7rem;
     }
 
     .keyboard-container .keyboard-key.black+.white {
         margin-left: -0.8rem;
+    }
+}
+
+@media screen and (max-width: 800px) {
+    .keyboard-container .keyboard-key.white {
+        width: 2rem;
+        height: 6rem;
+    }
+
+    .keyboard-container .keyboard-key.black {
+        width: 1.6rem;
+        height: 3rem;
+        margin-left: -0.7rem;
+    }
+}
+
+@media screen and (min-width: 1000px) {
+    .keyboard-container .keyboard-inner {
+        max-width: 100%;
+        display: flex;
+        padding-bottom: 0.3rem;
+        align-items: flex-start;
+        /* 居中键盘 */
+        justify-content: center;
     }
 }

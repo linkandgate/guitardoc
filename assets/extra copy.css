@@ -1,0 +1,38 @@
+/* stylesheets/extra.css */
+/* 针对屏幕宽度 ≤ 768px 的设备（典型手机/平板竖屏） */
+@media screen and (max-width: 768px) {
+  .md-header {
+    background: #1a3a52;
+  }
+
+  .md-content {
+    font-size: 0.95rem;
+  }
+
+  .md-tabs {
+    display: none;
+  }
+}
+
+/* 针对屏幕宽度 ≥ 1200px 的大型桌面 */
+@media screen and (min-width: 768px) {
+  .md-tabs {
+    display: block !important;
+  }
+
+  .md-grid {
+    max-width: 100% !important;
+    /* 利用更多横向空间 */
+  }
+
+  [dir=ltr] .md-nav--primary .md-nav__list {
+    padding-left: .6rem;
+  }
+}
+
+@media screen and (min-width: 1200px) {
+  .md-grid {
+    max-width: 90% !important;
+    /* 利用更多横向空间 */
+  }
+}

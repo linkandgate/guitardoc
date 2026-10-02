@@ -1,0 +1,133 @@
+		/* ===== 自动滚动面板（悬浮式 / 移动端适配）===== */
+		#auto-scroll-panel {
+		    position: fixed;
+		    /* 居中悬浮在底部上方一点 */
+		    left: 50%;
+		    bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+		    transform: translateX(-50%);
+		    z-index: 9999;
+
+		    display: flex;
+		    align-items: center;
+		    gap: 8px;
+		    padding: 8px 14px;
+
+		    background: rgba(255, 255, 255, 0.95);
+		    backdrop-filter: blur(10px);
+		    -webkit-backdrop-filter: blur(10px);
+		    border: 1px solid rgba(0, 0, 0, 0.08);
+		    border-radius: 999px;
+		    /* 胶囊形 */
+		    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
+
+		    font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC",
+		        "Microsoft YaHei", sans-serif;
+		    font-size: 14px;
+		    color: #222;
+		    user-select: none;
+
+		    /* 防止超宽溢出屏幕 */
+		    max-width: calc(100vw - 24px);
+		    box-sizing: border-box;
+		}
+
+		#auto-scroll-panel label {
+		    white-space: nowrap;
+		    color: #444;
+		}
+
+		#auto-scroll-panel input[type="number"] {
+		    width: 68px;
+		    padding: 5px 8px;
+		    font-size: 15px;
+		    border: 1px solid #ccc;
+		    border-radius: 999px;
+		    text-align: right;
+		    box-sizing: border-box;
+		    background: #fff;
+		}
+
+		#auto-scroll-panel input[type="number"]:focus {
+		    outline: none;
+		    border-color: #4CAF50;
+		    box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.25);
+		}
+
+		#auto-scroll-panel button {
+		    padding: 6px 14px;
+		    font-size: 14px;
+		    border: none;
+		    border-radius: 999px;
+		    background: #4CAF50;
+		    color: #fff;
+		    cursor: pointer;
+		    transition: background 0.15s, transform 0.05s;
+		    min-height: 36px;
+		    touch-action: manipulation;
+		    -webkit-tap-highlight-color: transparent;
+		}
+
+		#auto-scroll-panel button:hover {
+		    background: #43a047;
+		}
+
+		#auto-scroll-panel button:active {
+		    background: #388e3c;
+		    transform: scale(0.97);
+		}
+
+		#auto-scroll-panel button#auto-scroll-reset {
+		    background: #607d8b;
+		}
+
+		#auto-scroll-panel button#auto-scroll-reset:hover {
+		    background: #546e7a;
+		}
+
+		#auto-scroll-panel button#auto-scroll-reset:active {
+		    background: #455a64;
+		}
+
+		.auto-scroll-hint {
+		    color: #999;
+		    font-size: 12px;
+		    white-space: nowrap;
+		}
+
+		/* 手机端（窄屏）：略微缩小、去掉提示语、加大按钮 */
+		@media (max-width: 640px) {
+		    #auto-scroll-panel {
+		        bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+		        gap: 6px;
+		        padding: 6px 10px;
+		        font-size: 13px;
+		    }
+
+		    #auto-scroll-panel label {
+		        font-size: 12px;
+		    }
+
+		    #auto-scroll-panel input[type="number"] {
+		        width: 58px;
+		        font-size: 14px;
+		        padding: 5px 6px;
+		    }
+
+		    #auto-scroll-panel button {
+		        padding: 8px 12px;
+		        font-size: 13px;
+		        min-height: 38px;
+		    }
+
+		    .auto-scroll-hint {
+		        display: none;
+		        /* 手机端隐藏空格键提示 */
+		    }
+		}
+
+		/* 打印时隐藏 */
+		@media print {
+		    #auto-scroll-panel {
+		        display: none !important;
+		    }
+		}

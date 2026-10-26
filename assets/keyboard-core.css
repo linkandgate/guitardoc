@@ -1,0 +1,885 @@
+/* 键盘演示 / 键盘播放器共用样式
+   来源：save-jp-keyboard/keyboard-svg-vertical.html 原本内联的 <style>
+   两个页面都引用这一份，改这里两边一起变。 */
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      height: 100%;
+      margin: 0;
+    }
+
+    body {
+      background: #0f1115;
+      color: #e6e8ee;
+      font: 14px/1.5 -apple-system, "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+      overflow: hidden;
+    }
+
+    #app {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+    }
+
+    header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 16px;
+      border-bottom: 1px solid #1c2029;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 14px;
+      border-radius: 8px;
+      cursor: pointer;
+      background: #1b2029;
+      color: #e6e8ee;
+      border: 1px solid #2a3140;
+      font-size: 13px;
+      user-select: none;
+      transition: background .15s;
+    }
+
+    .btn:hover {
+      background: #232a36;
+    }
+
+    .btn.primary {
+      background: #2f81f7;
+      border-color: #2f81f7;
+      color: #fff;
+    }
+
+    .btn.primary:hover {
+      background: #4a92ff;
+    }
+
+    .btn:disabled {
+      opacity: .4;
+      cursor: not-allowed;
+    }
+
+    .chk {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 13px;
+      color: #a8b0c0;
+      cursor: pointer;
+    }
+
+    #vol {
+      width: 78px;
+      accent-color: #2f81f7;
+    }
+
+    .chk select {
+      background: #1b2029;
+      color: #e6e8ee;
+      border: 1px solid #2a3140;
+      border-radius: 6px;
+      padding: 3px 6px;
+      font-size: 12px;
+    }
+
+    #status {
+      color: #8a92a4;
+      font-size: 13px;
+    }
+
+    #time {
+      margin-left: auto;
+      color: #8a92a4;
+      font-variant-numeric: tabular-nums;
+      font-size: 13px;
+    }
+
+    #bar {
+      height: 3px;
+      background: #1c2029;
+      flex: none;
+    }
+
+    #barfill {
+      height: 100%;
+      width: 0;
+      background: linear-gradient(90deg, #2f81f7, #7ee787);
+    }
+
+    #board {
+      flex: none;
+      margin: auto 0;
+      overflow: hidden;
+      height: clamp(150px, 26vh, 260px);
+      display: flex;
+      flex-direction: column;
+      padding: 0 12px;
+    }
+
+    #keys {
+      position: relative;
+      flex: 1 1 auto;
+    }
+
+    .key {
+      position: absolute;
+      bottom: 0;
+      overflow: hidden;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      transition: background-color .06s linear;
+    }
+
+    /* 白键：纯白，只靠 1px 内阴影做分隔线 */
+    .key.white {
+      height: 100%;
+      z-index: 1;
+      background: #ffffff;
+      border: none;
+      border-radius: 0 0 3px 3px;
+      /* 分隔线画在左边缘：宽度重叠 0.5px 时，自己的左边线不会被前一个键盖住 */
+      box-shadow: inset 1px 0 0 #dcdcdc;
+    }
+
+    /* 黑键：从后挡板往下伸，窄、短、圆角，高度由 JS 按滑块给定 */
+    .key.black {
+      top: 0;
+      bottom: auto;
+      z-index: 2;
+      background: linear-gradient(180deg, #3b3b3b 0%, #1d1d1d 14%, #101010 70%, #060606 100%);
+      border: none;
+      border-radius: 3px;
+      box-shadow: 0 2px 3px rgba(0, 0, 0, .45);
+    }
+
+    /* 按下 */
+    .key.white.on {
+      background: var(--c, #2f81f7);
+      box-shadow: inset 1px 0 0 rgba(0, 0, 0, .12);
+    }
+
+    .key.black.on {
+      background: var(--c, #2f81f7);
+      box-shadow: 0 1px 2px rgba(0, 0, 0, .4);
+    }
+
+    /* 音名：字号由 JS 按键宽自适应 */
+    .lab {
+      font-weight: 500;
+      line-height: 1;
+      padding-bottom: 8px;
+      letter-spacing: .1px;
+      color: #3c3c3c;
+      pointer-events: none;
+      white-space: nowrap;
+    }
+
+    .key.black .lab {
+      padding-bottom: 6px;
+      color: #b4b4b4;
+    }
+
+    .key.white.on .lab {
+      color: #ffffff;
+    }
+
+    .key.black.on .lab {
+      color: #ffffff;
+    }
+
+
+
+    /* ---------- 五线谱面板 ---------- */
+    #scoreInfo {
+      flex: none;
+      padding: 7px 16px 8px;
+      background: #121620;
+      border-bottom: 1px solid #1c2029;
+      color: #c8d2e2;
+      font-size: 13px;
+      letter-spacing: .2px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    #scoreInfo[hidden] {
+      display: none;
+    }
+
+    #scoreInfo b {
+      color: #fff;
+      font-weight: 600;
+    }
+
+    #scoreInfo span {
+      color: #7f8a9e;
+    }
+
+    #scoreWrap {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow: auto;
+      padding: 10px 14px 6px;
+      background: #121620;
+      border-bottom: 1px solid #1c2029;
+      scroll-behavior: smooth;
+      /* 换行时不要瞬移 */
+    }
+
+    /* SVG 谱面 */
+    #svgWrap {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow: auto;
+      scroll-behavior: smooth;
+      padding: 10px 14px 8px;
+      background: #121620;
+      position: relative;
+    }
+
+    #svgWrap[hidden] {
+      display: none;
+    }
+
+    #svgHost {
+      position: relative;
+      /* 让 #svgCursor 以内容坐标系定位 */
+    }
+
+    #svgHost .svgPage {
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: inset 0 0 0 1px #e4ddcc;
+      margin: 0 auto 14px;
+      max-width: 100%;
+      overflow: hidden;
+    }
+
+    #svgHost .svgPage svg {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+
+    /* 注意：必须是 absolute 并挂在 #svgHost 里，
+       否则手动滚动页面时框会钉在屏幕上、和音符脱开。 */
+    #svgCursor {
+      position: absolute;
+      z-index: 60;
+      display: none;
+      background: rgba(217, 43, 37, .16);
+      border: 2px solid rgba(217, 43, 37, .85);
+      border-radius: 5px;
+      pointer-events: none;
+    }
+
+    .Note.svghl {
+      fill: #d92b25 !important;
+    }
+
+    #scoreWrap[hidden] {
+      display: none;
+    }
+
+    #score {
+      background: #fbf9f3;
+      border-radius: 10px;
+      padding: 4px 8px 2px;
+      box-shadow: inset 0 0 0 1px #e4ddcc;
+      display: block;
+      width: 100%;
+      box-sizing: border-box;
+      /* 自定义宽度（每行小节数）时水平居中；设成 100% 时这句不产生任何偏移 */
+      margin: 0 auto;
+    }
+
+    /* OSMD 渲染出来的 SVG */
+    #score svg {
+      display: block;
+    }
+
+    /* 竖向滚动框（自绘） */
+    #score {
+      position: relative;
+    }
+
+    #cursorBox {
+      position: absolute;
+      z-index: 5;
+      pointer-events: none;
+      display: none;
+      border-radius: 5px;
+      background: rgba(217, 43, 37, .20);
+      border: 2px solid rgba(217, 43, 37, .85);
+      box-shadow: 0 0 0 1px rgba(255, 255, 255, .55) inset;
+    }
+
+
+    .diag-card {
+      width: min(900px, 94vw);
+      max-height: 86vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .diag-card pre {
+      flex: 1 1 auto;
+      overflow: auto;
+      margin: 0 0 14px;
+      padding: 12px;
+      background: #0d1016;
+      border: 1px solid #232a36;
+      border-radius: 8px;
+      color: #c9d3e0;
+      font: 12px/1.55 ui-monospace, Consolas, "Courier New", monospace;
+      white-space: pre-wrap;
+      word-break: break-all;
+      max-height: 62vh;
+    }
+
+    #app.has-score #board {
+      height: clamp(104px, 19vh, 180px);
+    }
+
+    footer {
+      flex: none;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px;
+      align-items: center;
+      padding: 10px 16px 14px;
+      font-size: 12px;
+      color: #8a92a4;
+    }
+
+    .lg {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .lg i {
+      width: 10px;
+      height: 10px;
+      border-radius: 3px;
+      display: inline-block;
+    }
+
+    .lg b {
+      color: #6b7385;
+      font-weight: 500;
+    }
+
+    .hint {
+      margin-left: auto;
+    }
+
+    /* ---------- 导出弹窗 ---------- */
+    .modal {
+      position: fixed;
+      inset: 0;
+      z-index: 50;
+      background: rgba(6, 8, 12, .72);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal[hidden] {
+      display: none;
+    }
+
+    .modal-card {
+      width: 340px;
+      padding: 20px 22px;
+      background: #14181f;
+      border: 1px solid #2a3140;
+      border-radius: 12px;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, .65);
+    }
+
+    .modal-card h3 {
+      margin: 0 0 16px;
+      font-size: 15px;
+      font-weight: 600;
+    }
+
+    .modal-card label {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 12px;
+      font-size: 13px;
+      color: #b7bec9;
+    }
+
+    .modal-card select {
+      background: #1b2029;
+      color: #e6e8ee;
+      border: 1px solid #2a3140;
+      border-radius: 7px;
+      padding: 5px 8px;
+      font-size: 13px;
+    }
+
+    .modal-card .tip {
+      margin: 4px 0 16px;
+      font-size: 12px;
+      line-height: 1.6;
+      color: #7c8494;
+    }
+
+    .modal-card .row {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
+    /* ===== 对照流：白底黑谱 ===== */
+    #svgHost {
+      position: relative;
+      color: #000;
+    }
+
+    .flowSys,
+    .flowJp {
+      background: #ffffff;
+      border-radius: 10px;
+      box-sizing: border-box;
+      overflow: hidden;
+    }
+
+    .flowSys {
+      padding: 0px 10px;
+      margin: 0 auto 0;
+      border-radius: 10px 10px 0 0;
+
+    }
+
+    .flowJp {
+      padding: 10px 0px;
+      margin: -25px -10px 0 0;
+      border-radius: 0 0 10px 10px;
+
+      color: #000;
+    }
+
+    /* 简谱的时值线是 box-shadow(不写颜色) → 取 currentColor */
+    .flowJp,
+    .flowJp * {
+      color: #000;
+    }
+
+    .flowSys svg {
+      display: block;
+      margin: 0 auto;
+    }
+
+    .flowSys svg,
+    .flowSys svg * {
+      color: #000;
+    }
+
+    /* 简谱当前音符的高亮块：出现时做一个极短的提亮过渡，眼睛更容易跟上 */
+    .flowJp .SparksNMN-notehl {
+      transition: opacity .1s linear;
+    }
+
+    /* 音符落点：短促提亮一下再回落，扫谱时更容易抓住 */
+    @keyframes jpNotePop {
+      0% { filter: brightness(1.42) saturate(1.8); }
+      100% { filter: saturate(1.4); }
+    }
+
+    .flowJp .jpHit {
+      animation: jpNotePop .24s ease-out;
+    }
+
+    /* 音符染色 */
+    .Note.svghl {
+      fill: #d92b25 !important;
+    }
+
+    #svgCursor {
+      position: absolute;
+      z-index: 60;
+      display: none;
+      background: rgba(217, 43, 37, .16);
+      border: 2px solid rgba(217, 43, 37, .85);
+      border-radius: 5px;
+      pointer-events: none;
+    }
+
+    /* 键盘左右留出间隔，不铺满整行 */
+    #board {
+      padding-left: 25%;
+      padding-right: 25%;
+      box-sizing: border-box;
+    }
+
+    /* 键盘高度调低（原来 clamp(104px,19vh,180px)） */
+    #board {
+      height: clamp(104px, 11vh, 150px);
+    }
+
+    /* ===== 竖屏基准布局 ===== */
+    body {
+      display: flex;
+      justify-content: center;
+      align-items: stretch;
+      background: #07090c;
+    }
+
+    #app {
+      width: 100%;
+      max-width: 56.25vh;
+      /* 9:16 竖屏 */
+      margin: 0 auto;
+      height: 100vh;
+      overflow: hidden;
+      box-shadow: 0 0 0 1px #1c2029;
+    }
+
+    /* 竖屏下页头容易挤，允许换行并压缩间距 */
+    header {
+      flex-wrap: wrap;
+      gap: 4px;
+      padding: 6px 8px;
+    }
+
+    header .btn,
+    header .chk {
+      font-size: 12px;
+      padding: 4px 8px;
+    }
+
+    /* 竖屏下键盘几乎占满竖列宽度 */
+    #board {
+      padding-left: 2% !important;
+      padding-right: 2% !important;
+    }
+
+    /* ===== 左：控制栏  右：谱面 + 键盘 ===== */
+    body {
+      display: block;
+      background: #07090c;
+    }
+
+    #app {
+      display: flex;
+      flex-direction: row;
+      width: 100%;
+      max-width: none;
+      height: 100vh;
+      margin: 0;
+      overflow: hidden;
+      box-shadow: none;
+      gap: 0;
+    }
+
+    /* 左侧控制栏 */
+    header {
+      width: 290px;
+      flex: 0 0 290px;
+      display: flex;
+      flex-direction: column;
+      /* 竖向控制栏绝不换行：内容比视口高时只纵向滚动，
+         否则会折出第二列（按钮被挤到侧栏右边，页面出现横向滚动条） */
+      flex-wrap: nowrap;
+      align-items: stretch;
+      gap: 6px;
+      overflow-x: hidden;
+      overflow-y: auto;
+      padding: 12px;
+      border-right: 1px solid #1c2029;
+      background: #0b0e13;
+    }
+
+    header .btn,
+    header .chk,
+    header .hgroup {
+      width: 100%;
+    }
+
+    header .btn {
+      text-align: left;
+    }
+
+    #status {
+      width: 100%;
+      white-space: normal;
+      line-height: 1.5;
+      margin-top: 8px;
+      color: #8b97ab;
+    }
+
+    header input[type=range] {
+      width: 100%;
+    }
+
+    /* 右侧舞台：谱面 + 键盘 */
+    .stage {
+      flex: 1 1 auto;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      overflow: hidden;
+      border-left: 1px solid #141922;
+    }
+
+    .stage #bar {
+      flex: none;
+    }
+
+    .stage #scoreInfo {
+      flex: none;
+    }
+
+    .stage #svgWrap {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow: auto;
+    }
+
+    .stage #board {
+      flex: none;
+    }
+
+    .stage #legend {
+      flex: none;
+    }
+
+    /* 竖屏不再限制整页宽度，改由右侧舞台自适应 */
+
+    /* ===== 右侧舞台固定 9:16，水平居中 ===== */
+    .stage {
+      flex: 0 0 auto;
+      height: 100%;
+      aspect-ratio: 3 / 4;
+      /* 竖屏改用 3:4 */
+      width: auto;
+      max-width: calc(100% - 2px);
+      margin: 0 auto;
+      background: #0b0e13;
+      box-shadow: 0 0 0 1px #1c2029;
+      overflow: hidden;
+    }
+
+    /* 键盘固定在舞台底部（不随剩余空间垂直居中） */
+    .stage #board {
+      margin-top: auto;
+      margin-bottom: 0;
+    }
+
+    /* 舞台白底 */
+    .stage {
+      background: #ffffff;
+    }
+
+    .stage #svgWrap {
+      background: #ffffff;
+    }
+
+    /* 隐藏谱面区滚动条（保留滚动功能） */
+    .stage #svgWrap {
+      scrollbar-width: none;
+      /* Firefox */
+      -ms-overflow-style: none;
+      /* 旧 Edge */
+    }
+
+    .stage #svgWrap::-webkit-scrollbar {
+      width: 0;
+      height: 0;
+      display: none;
+    }
+
+    /* 曲名信息不再放在舞台内，改到左侧 */
+    .stage #scoreInfo {
+      display: none !important;
+    }
+
+    .side-info {
+      display: block;
+      margin-bottom: 10px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #1c2029;
+      color: #cfd8e6;
+      font-size: 13px;
+      line-height: 1.6;
+      word-break: break-all;
+    }
+
+    .side-info b {
+      color: #fff;
+    }
+
+    /* 底部图例/提示移到左侧 */
+    .stage #legend {
+      display: none !important;
+    }
+
+    .side-legend {
+      display: block;
+      margin-top: 10px;
+      padding-top: 8px;
+      border-top: 1px solid #1c2029;
+      color: #8b97ab;
+      font-size: 12px;
+      line-height: 1.7;
+    }
+
+    /* 键盘区：深色底，与白色谱面区分开 */
+    .stage #board {
+      background: #12161d;
+      border-top: 1px solid #232833;
+      padding-top: 6px;
+      padding-bottom: 6px;
+    }
+
+    /* 简谱只做音符高亮，不再画播放框（高亮块由 efData 的 SparksNMN-notehl 提供） */
+
+    /* ===== 左侧栏排版优化 ===== */
+    header {
+      gap: 0 !important;
+      padding: 14px 12px 18px !important;
+    }
+
+    /* 歌曲信息块 */
+    .side-info {
+      display: block;
+      margin: 0 0 14px;
+      padding: 0 0 12px;
+      border-bottom: 1px solid #232833;
+      line-height: 1.55;
+    }
+
+    .side-info b {
+      display: block;
+      font-size: 15px;
+      font-weight: 600;
+      color: #eef2f8;
+      margin-bottom: 3px;
+    }
+
+    .side-info span {
+      display: block;
+      font-size: 12px;
+      color: #7d8899;
+    }
+
+    /* 按钮统一高度与间距 */
+    header .btn {
+      height: 32px;
+      margin-bottom: 6px;
+      border-radius: 8px;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+    }
+
+    /* 勾选项行高对齐 */
+    header .chk {
+      height: 28px;
+      margin-bottom: 6px;
+      font-size: 13px;
+      color: #b9c3d2;
+    }
+
+    /* 状态文字 */
+    #status {
+      margin-top: 4px !important;
+      font-size: 12px;
+      color: #6f7b8d;
+      line-height: 1.6;
+    }
+
+    /* 图例 */
+    .side-legend {
+      margin-top: 12px;
+      padding-top: 10px;
+      font-size: 12px;
+      color: #6f7b8d;
+    }
+
+    /* 隐藏发声 / 音量 */
+    #soundChk,
+    #vol {
+      display: none !important;
+    }
+
+    /* 歌曲信息固定在左侧栏底部 */
+    .side-info {
+      margin: auto 0 0 !important;
+      /* 顶到最下面 */
+      padding: 12px 0 0 !important;
+      border-bottom: none !important;
+      border-top: 1px solid #232833;
+    }
+
+    /* ===== 勾选框：与按钮同款圆角风格 ===== */
+    header .chk input[type=checkbox] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 17px;
+      height: 17px;
+      margin: 0 8px 0 0;
+      border: 1px solid #39414f;
+      border-radius: 6px;
+      background: #151a22;
+      cursor: pointer;
+      position: relative;
+      flex: none;
+      transition: background-color .15s, border-color .15s;
+    }
+
+    header .chk input[type=checkbox]:hover {
+      border-color: #4a566a;
+    }
+
+    header .chk input[type=checkbox]:checked {
+      background: #2f81f7;
+      border-color: #2f81f7;
+    }
+
+    /* 对勾 */
+    header .chk input[type=checkbox]:checked::after {
+      content: '';
+      position: absolute;
+      left: 5px;
+      top: 1.5px;
+      width: 5px;
+      height: 9px;
+      border: solid #fff;
+      border-width: 0 2px 2px 0;
+      transform: rotate(45deg);
+    }
+
+    header .chk {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      cursor: pointer;
+    }
+
+    /* 下拉框也统一圆角 */
+    header .chk select {
+      border-radius: 6px;
+      height: 26px;
+      padding: 0 6px;
+      border: 1px solid #39414f;
+      background: #151a22;
+      color: #c9d3e2;
+    }

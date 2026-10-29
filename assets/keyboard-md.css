@@ -2,6 +2,8 @@
    = source: assets/keyboard-core.css + assets/keyboard-player.css
    = 作用域: 所有规则都在 .kb-md 里，不会影响宿主页面（mkdocs material / windmill）的
      body / header / 左侧导航 / 主题色 / 正文字体。
+     例外只有末尾「平板整屏」那段的两条 :has() 规则：只在页面里真有播放器时
+     去掉站点页脚和正文底边距（否则滚到底会把顶部控制条顶出屏幕）。
 
    页面里这样用：
      <div class="kb-md" data-song="song.data.js"> …播放器 DOM… </div>
@@ -931,7 +933,7 @@
   font-family: Consolas, Menlo, monospace;
 }
 
-/* ===== 嵌入用的布局：16:9 横向舞台，宽度跟随正文栏，不溢出 mkdocs 内容区 ===== */
+/* ===== 嵌入用的布局：宽度跟随正文栏，不溢出 mkdocs 内容区（高度见末尾「整屏播放器」） ===== */
 .kb-md {
   position: relative;
   width: 100%;
@@ -949,14 +951,7 @@
   text-align: left;
 }
 
-/* 窄屏（手机/分栏）16:9 会太扁，改成按高度排 */
-@media (max-width: 719px) {
-  .kb-md {
-    aspect-ratio: auto;
-    height: min(70vh, 460px);
-    min-height: 340px;
-  }
-}
+/* 16:9 舞台在文件末尾被「整屏播放器」覆盖（高度改成按视口算）；想回 16:9 删掉那一段即可 */
 
 .kb-md #app {
   height: 100%;
@@ -1064,4 +1059,35 @@
 
 .kb-md a {
   color: inherit;
+}
+
+/* ===== 整屏播放器（所有宽度） =====
+   16:9 的舞台在宽屏上刚好占满一屏，谱面反而被压小；平板上更糟（标题占掉半屏）。
+   所以统一改成整屏高度：
+     播放器高 = 视口高 − 站点顶栏高（--kb-md-top）
+   标题滑出视口后，播放器正好顶在站点顶栏下方，谱面 + 键盘铺满整屏，
+   顶部控制条（.topbar）跟着播放器一起留在最上面。
+   顶栏高由 keyboard-md-boot.js 量出来写进 --kb-md-top（mkdocs material 是 48px，
+   带导航标签栏时 96px）；脚本没跑时按 48px 兜底，别的主题也可以自己设这个变量。
+   想回到原来的 16:9，把这一段删掉即可（--kb-md-ratio 仍然有效）。 */
+.kb-md {
+  aspect-ratio: auto;
+  min-height: 0;
+  height: calc(100vh - var(--kb-md-top, 48px));
+  height: calc(100dvh - var(--kb-md-top, 48px));
+  margin: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+/* 播放器是正文最后一屏。站点页脚和正文底边距会让页面多出可滚动的一截，
+   滚到底时把播放器往顶栏里顶，顶部控制条就被盖住了。播放器页里去掉这两块，
+   页面最后正好停在「顶栏 + 整屏播放器」。
+   :has() 只在「页面里真有播放器」时生效，别的页面不受影响。 */
+body:has(.kb-md) .md-footer {
+  display: none;
+}
+
+body:has(.kb-md) .md-content__inner {
+  margin-bottom: 0;
 }

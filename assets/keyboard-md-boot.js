@@ -36,6 +36,32 @@
     zl.textContent = Math.round(window.KeyboardPlayer.getZoom() * 100) + '%';
   }
 
+  /* 平板整屏布局要用到站点 sticky 顶栏的高度（CSS 里算不到别的元素多高）：
+     把真实高度写进 --kb-md-top，播放器高度 = 视口高 − 顶栏高。
+     mkdocs material 是 48px，带导航标签栏时 96px；顶栏不吸顶就按 0 算。 */
+  function syncTopOffset() {
+    var bar = document.querySelector('.md-header') || document.querySelector('header');
+    var h = 0;
+    if (bar) {
+      var pos = '';
+      try { pos = getComputedStyle(bar).position; } catch (e) { }
+      if (pos === 'fixed' || pos === 'sticky') {
+        h = Math.round(bar.getBoundingClientRect().height) || 0;
+      }
+    }
+    document.documentElement.style.setProperty('--kb-md-top', h + 'px');
+  }
+
+  function watchTopOffset() {
+    syncTopOffset();
+    window.addEventListener('resize', syncTopOffset);
+    window.addEventListener('orientationchange', syncTopOffset);
+    var bar = document.querySelector('.md-header') || document.querySelector('header');
+    if (bar && window.ResizeObserver) {
+      try { new ResizeObserver(syncTopOffset).observe(bar); } catch (e) { }
+    }
+  }
+
   function boot(data) {
     if (!data) { showHint(); return false; }
     var ok = false;
@@ -59,6 +85,7 @@
     root = document.querySelector('.kb-md');
     if (!root) return;
     hint = document.getElementById('emptyHint');
+    watchTopOffset();
 
     ['scoreMinus', 'scorePlus'].forEach(function (id) {
       var b = document.getElementById(id);

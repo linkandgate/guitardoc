@@ -1,4 +1,4 @@
-﻿/* 键盘演示 / 键盘播放器共用的播放引擎
+/* 键盘演示 / 键盘播放器共用的播放引擎
    来源：save-jp-keyboard/keyboard-svg-vertical.html 原本内联的 IIFE。
    页面里放齐它需要的 DOM（见 keyboard-svg-vertical.html / keyboard-player.html），
    再引入本文件，右侧舞台（五线谱 + 简谱 + 键盘 + 播放）就能直接跑。
@@ -3092,8 +3092,15 @@
       }
 
       // ---------- 简谱字体 ----------
-      var FAMS = ['CommonLight', 'CommonSerif', 'CommonBlack', 'Roman', 'RomanItalic',
-        'SparksNMN-EOPNumber', 'SparksNMN-mscore-20', 'SparksNMN-Bravura'];
+      // 简谱真正离不开的只有下面这几个「符号/数字」字体（加起来 ~400KB）：
+      //   SparksNMN-EOPNumber 3KB 数字、SparksNMN-Bravura 328KB 小节线/符号、
+      //   SparksNMN-mscore-20 20KB 升降号、Roman 51KB 调号等文字
+      // 中文字体（CommonLight / CommonSerif / CommonBlack）是 4~8MB 的大文件，
+      // 只影响简谱里那句中文标题；它们不参与「首屏是否可渲染」的判断，后台加载、自动替换。
+      var CORE_FAMS = ['Roman', 'RomanItalic', 'SparksNMN-EOPNumber',
+        'SparksNMN-mscore-20', 'SparksNMN-Bravura'];
+      var TEXT_FAMS = ['CommonLight', 'CommonSerif', 'CommonBlack'];
+      var FAMS = TEXT_FAMS.concat(CORE_FAMS);
       var fontsReady = false, fontsInjected = false;
 
       function fmtFor(u) {
@@ -3104,40 +3111,108 @@
         return '';
       }
 
+      // 字体来源，优先级：
+      //   1) window.fontRootList = [ 'https://…/font/', … ]  多源兜底，按顺序尝试（推荐）
+      //   2) window.fontLocalRoot（+ 可选的 window.fontCdnRoot）  单个源
+      // 每个源后面的路径都是 fontLoadData 里的 url（如 roman/roman.woff2），
+      // 所以以 "/" 结尾的目录最省心；没写结尾的会自动补上。
+      function fontRoots() {
+        var roots = [];
+        var list = window.fontRootList;
+        if (list && list.length) {
+          for (var i = 0; i < list.length; i++) {
+            var r = String(list[i] || '').trim();
+            if (!r) continue;
+            if (!/\/$/.test(r)) r += '/';
+            roots.push(r);
+          }
+          if (roots.length) return roots;
+        }
+        var local = window.fontLocalRoot || 'assets/fonts/';
+        if (!/\/$/.test(local)) local += '/';
+        roots.push(local);
+        var cdn = String(window.fontCdnRoot || '').trim();
+        if (cdn) {
+          if (!/\/$/.test(cdn)) cdn += '/';
+          roots.push(cdn);
+        }
+        return roots;
+      }
+
       function injectFonts() {
         if (fontsInjected) return;
         fontsInjected = true;
-        var list = window.fontLoadData || [], root = window.fontCdnRoot || '';
+        var list = window.fontLoadData || [];
         if (!list.length) return;
-        // 本地字体根目录：由 jianpu-fonts.js 按自己的地址算好（多层目录的 md 页面也能取到）
-        var local = window.fontLocalRoot || 'assets/fonts/';
+        var skipText = (window.KB_JP_TEXT_FONTS === false);   // 关掉中文大字体（4~8MB/个）
+        var roots = fontRoots();
         var css = [];
+        var skipped = 0;
         for (var i = 0; i < list.length; i++) {
           var f = list[i];
-          var src = 'url("' + local + f.url + '")' + fmtFor(f.url);
-          if (root) src += ', url("' + root + '/' + f.url + '")' + fmtFor(f.url);
-          css.push('@font-face{font-family:"' + f.name + '";src:' + src +
+          if (skipText && TEXT_FAMS.indexOf(f.name) >= 0) { skipped++; continue; }
+          var parts = [];
+          for (var r = 0; r < roots.length; r++) {
+            parts.push('url("' + roots[r] + f.url + '")' + fmtFor(f.url));
+          }
+          css.push('@font-face{font-family:"' + f.name + '";src:' + parts.join(',') +
             ';font-weight:' + (f.weight || 'normal') + ';font-display:swap;}');
         }
         var st = document.createElement('style');
         st.id = 'jpFontCss';
         st.textContent = css.join('\n');
         document.head.appendChild(st);
+        if (skipped) {
+          try {
+            console.log('[字体] KB_JP_TEXT_FONTS=false：跳过 ' + skipped +
+              ' 个中文字体，简谱里的中文用系统字体显示');
+          } catch (e) { }
+        }
       }
 
+      // 字体是否真的用上了：canvas 里比较「带这个字体」和「纯 fallback」的文本宽度。
+      // （document.fonts.check() 在字体族名/字重对不上时会误报 false，这里不用它。）
+      function fontUsable(name) {
+        try {
+          var cv = document.createElement('canvas').getContext('2d');
+          if (!cv) return true;
+          var t = '0123456789';
+          cv.font = '40px monospace';
+          var w0 = cv.measureText(t).width;
+          cv.font = '40px "' + name + '", monospace';
+          var w1 = cv.measureText(t).width;
+          return Math.abs(w0 - w1) > 0.5;
+        } catch (e) { return true; }
+      }
+
+      // 只等「核心符号字体」（~400KB）就放行渲染；中文字体（4~8MB/个）不阻塞首屏，
+      // 等它到位浏览器会自动换字形（位置都是按 em 算的，不会因为换字体而重排）。
       function waitFonts(cb) {
         injectFonts();
         var done = false;
-        var fin = function () { if (!done) { done = true; fontsReady = true; cb(); } };
+        var fin = function () {
+          if (done) return;
+          done = true;
+          fontsReady = true;
+          try {
+            if (!fontUsable('SparksNMN-EOPNumber')) {
+              console.warn('[字体] 简谱字体没加载上（可能是字体源不可达 / 被拦截）。' +
+                '当前字体源：' + fontRoots().join('  |  '));
+            }
+          } catch (e) { }
+          cb();
+        };
         var jobs = [];
         try {
           if (document.fonts && document.fonts.load) {
-            for (var i = 0; i < FAMS.length; i++) jobs.push(document.fonts.load('16px "' + FAMS[i] + '"'));
+            for (var i = 0; i < CORE_FAMS.length; i++) {
+              jobs.push(document.fonts.load('16px "' + CORE_FAMS[i] + '"'));
+            }
           }
         } catch (e) { }
         if (!jobs.length) { fin(); return; }
         Promise.all(jobs).then(fin).catch(fin);
-        setTimeout(fin, 8000);
+        setTimeout(fin, 3000);
       }
 
       // ---------- 简谱分节 ----------
@@ -3385,6 +3460,7 @@
         curGroup = 0;
         lastGroupW = groupW;
         try { applyPortraitWidth(groupW); } catch (eP) { }
+        try { fixJpOctaveDots(); } catch (eFix) { }
 
         // 竖屏：让「一组 = 五线谱 + 简谱」正好装进可视区
         if (portraitMode && !forceW && blocks.length) {
@@ -3403,6 +3479,60 @@
               buildFlow(nw);
               return;
             }
+          }
+        }
+      }
+
+      // 和弦里的八度点会撞上「上面那个音」：简谱行距约 12.7px，而八度点固定画在
+      // 自己那个音上方约 14px（盒子），正好落在上面那个音的笔画里。
+      // 这里把这类点挪到两个音之间的空白处：仍然跟着它自己的音，不压字、不挪音符。
+      // 注意：点的盒子是整行高，墨迹偏下（约在盒高的 64% 处），数字墨迹才是居中的；
+      // 所以落点必须按「墨迹中心」算，否则会压到它自己那个音上。
+      // 低八度点（画在音下方）同理，只是往上挪。宽度变了会重建对照流，重建后重新算。
+      var JP_DOT_INK = 0.67;     // 点的墨迹中心 ÷ 盒子高（盒子是整行高，墨迹贴底；实测 0.144~0.21，取中间）
+      var JP_DIGIT_INK = 0.5;    // 数字的墨迹中心 ÷ 盒子高（居中）
+      var JP_DIGIT_HALF = 0.236; // 数字墨迹半高 ÷ 盒子高
+      var JP_DOT_HALF = 0.05;    // 点的墨迹半高 ÷ 盒子高
+
+      function fixJpOctaveDots() {
+        var lines = document.querySelectorAll('.flowJp');
+        for (var li = 0; li < lines.length; li++) {
+          var spans = lines[li].querySelectorAll('span');
+          var dots = [], nums = [];
+          for (var k = 0; k < spans.length; k++) {
+            var sp = spans[k];
+            if (sp.querySelector('span,div')) continue;
+            var txt = (sp.textContent || '').trim();
+            if (!txt) continue;
+            var r = sp.getBoundingClientRect();
+            if (r.width < 0.2 || r.height < 0.2) continue;
+            var cur = parseFloat(sp.style.marginTop) || 0;
+            var ink = r.top - cur + (txt === '.' ? JP_DOT_INK : JP_DIGIT_INK) * r.height;
+            var item = { el: sp, cx: r.left + r.width / 2, ink: ink, h: r.height };
+            if (txt === '.') dots.push(item);
+            else if (/^[0-9]$/.test(txt)) nums.push(item);
+          }
+          for (var i = 0; i < dots.length; i++) {
+            var d = dots[i], hit = null, up = null, down = null;
+            var touch = (JP_DIGIT_HALF + JP_DOT_HALF) * d.h + 0.6;   // 墨迹相接的判定距离
+            for (var j = 0; j < nums.length; j++) {
+              var g = nums[j];
+              if (Math.abs(g.cx - d.cx) > 1.2) continue;             // 只看同一列
+              var dyi = d.ink - g.ink;
+              if (Math.abs(dyi) <= touch) {                          // 墨迹压在某个音上
+                if (!hit || Math.abs(dyi) < Math.abs(d.ink - hit.ink)) hit = g;
+              } else if (dyi < 0) {                                  // 它自己的音在下面
+                if (!down || dyi > (d.ink - down.ink)) down = g;
+              } else {                                               // 它自己的音在上面（低八度点）
+                if (!up || dyi < (d.ink - up.ink)) up = g;
+              }
+            }
+            if (!hit) continue;
+            var owner = down || up;
+            if (!owner || owner === hit) continue;
+            if (Math.abs(owner.ink - hit.ink) < 6) continue;
+            var move = (hit.ink + owner.ink) / 2 - d.ink;            // 落到两音之间的空白
+            if (Math.abs(move) > 0.4) d.el.style.marginTop = move.toFixed(2) + 'px';
           }
         }
       }

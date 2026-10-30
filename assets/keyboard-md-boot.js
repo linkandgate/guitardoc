@@ -36,8 +36,50 @@
     zl.textContent = Math.round(window.KeyboardPlayer.getZoom() * 100) + '%';
   }
 
-  /* 平板整屏布局要用到站点 sticky 顶栏的高度（CSS 里算不到别的元素多高）：
-     把真实高度写进 --kb-md-top，播放器高度 = 视口高 − 顶栏高。
+  var topOffset = 0;   // 站点 sticky 顶栏高度（px）
+  var spacer = null;   // 播放器下面垫出来的一段空间，给「滑掉标题」用
+
+  /* 播放器是正文最后一屏，但它上面还有页面标题。要同时满足两件事：
+       1) 打开时键盘就在屏内（不能被标题挤到屏幕外，必须下拉才看到）；
+       2) 往上滑一下，标题滑走、播放器顶到站点顶栏下面，谱面+键盘占满一屏。
+     做法：静止时高度 = 可见高度 − 播放器位置；同时在播放器下面垫出
+     「播放器位置 − 顶栏高度」的滚动空间（正好等于标题那一块的高度），
+     滑动时播放器高度按滚动量同步加长 —— 屏幕底部始终贴着，标题一路滑出去，
+     滑到头播放器顶端正好停在顶栏下面，页面也就到底了。
+     高度不能用 100vh 硬算：真机（iPad / Android）工具栏收起时的 100vh 比可见区域大，
+     键盘就会被推到屏幕外，所以一律用 innerHeight 量。 */
+  function syncFit() {
+    var kb = root;
+    if (!kb) return;
+    var vh = window.innerHeight || document.documentElement.clientHeight || 0;
+    if (!vh) return;
+    var scroll = window.pageYOffset || 0;
+    var docTop = kb.getBoundingClientRect().top + scroll;   // 播放器在文档里的位置
+    var room = Math.max(0, Math.round(docTop - topOffset));  // 能滑掉多少（≈ 标题高度）
+    var base = Math.round(vh - docTop);                      // 静止时的高度（键盘贴底）
+    var min = 360;                                           // 再挤就只剩谱面缝了
+    if (base < min) base = min;
+    var used = Math.min(Math.max(scroll, 0), room);
+    var full = Math.round(vh - topOffset);                   // 滑到头时的整屏高度
+    var h = Math.min(base + used, full);
+    kb.style.setProperty('--kb-md-fit', h + 'px');
+
+    var sp = ensureSpacer();
+    if (sp) sp.style.height = Math.max(0, room - used) + 'px';
+  }
+
+  function ensureSpacer() {
+    if (spacer && spacer.parentNode) return spacer;
+    if (!root || !root.parentNode) return null;
+    spacer = document.createElement('div');
+    spacer.setAttribute('aria-hidden', 'true');
+    spacer.style.cssText = 'height:0;margin:0;padding:0;border:0;background:transparent;' +
+      'pointer-events:none;overflow-anchor:none';
+    root.parentNode.insertBefore(spacer, root.nextSibling);
+    return spacer;
+  }
+
+  /* 站点 sticky 顶栏的高度：顶栏会盖住顶部控制条，滑到底时要停在它下面。
      mkdocs material 是 48px，带导航标签栏时 96px；顶栏不吸顶就按 0 算。 */
   function syncTopOffset() {
     var bar = document.querySelector('.md-header') || document.querySelector('header');
@@ -49,16 +91,30 @@
         h = Math.round(bar.getBoundingClientRect().height) || 0;
       }
     }
+    topOffset = h;
     document.documentElement.style.setProperty('--kb-md-top', h + 'px');
   }
 
-  function watchTopOffset() {
+  function syncLayout() {
     syncTopOffset();
-    window.addEventListener('resize', syncTopOffset);
-    window.addEventListener('orientationchange', syncTopOffset);
+    syncFit();
+  }
+
+  function watchLayout() {
+    syncLayout();
+    // 首屏字体/谱面渲染完再量一次，尺寸会变
+    [80, 400, 1200].forEach(function (ms) { setTimeout(syncLayout, ms); });
+    window.addEventListener('resize', syncLayout);
+    window.addEventListener('orientationchange', syncLayout);
+    // 滑动时按滚动量补偿高度：底部不跟着跑，标题才像是被「卷」上去
+    window.addEventListener('scroll', syncFit, { passive: true });
+    if (window.visualViewport) {
+      // 真机工具栏收起/展开、软键盘弹出，只走 visualViewport
+      window.visualViewport.addEventListener('resize', syncLayout);
+    }
     var bar = document.querySelector('.md-header') || document.querySelector('header');
     if (bar && window.ResizeObserver) {
-      try { new ResizeObserver(syncTopOffset).observe(bar); } catch (e) { }
+      try { new ResizeObserver(syncLayout).observe(bar); } catch (e) { }
     }
   }
 
@@ -78,6 +134,7 @@
     if (hint) hint.hidden = true;
     if (root && data.label) root.setAttribute('title', data.label);
     syncZoom();
+    syncLayout();          // 谱面渲染会改变高度，载完再量一次
     return true;
   }
 
@@ -85,7 +142,7 @@
     root = document.querySelector('.kb-md');
     if (!root) return;
     hint = document.getElementById('emptyHint');
-    watchTopOffset();
+    watchLayout();
 
     ['scoreMinus', 'scorePlus'].forEach(function (id) {
       var b = document.getElementById(id);

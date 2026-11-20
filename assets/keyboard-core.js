@@ -5024,6 +5024,7 @@
         for (i = rng[0]; i < rng[1]; i++) {
           var rr = score.notes[i];
           if (!rr || rr.part !== rec.part) continue;
+          if (rr.grace) continue;          // 装饰音不占简谱的格子，序号也不能算进去
           mine.push(i);
         }
         // 和弦（同一 ts 的多个音）在简谱里是从上往下画：高音在前、低音在后，
@@ -5033,6 +5034,11 @@
                  (score.notes[q].halfTone - score.notes[p].halfTone) || (p - q);
         });
         var pos = mine.indexOf(k);
+        if (pos < 0) {
+          // k 本身是装饰音：挂到下一个起播音符（没有就挂上一个非装饰音）
+          for (i = 0; i < mine.length; i++) if (mine[i] > k) { pos = i; break; }
+          if (pos < 0) pos = mine.length - 1;
+        }
         if (pos < 0) return null;
         var idx;
         if (mine.length === part.list.length) {

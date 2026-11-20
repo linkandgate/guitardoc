@@ -1,885 +1,1334 @@
 /* 键盘演示 / 键盘播放器共用样式
    来源：save-jp-keyboard/keyboard-svg-vertical.html 原本内联的 <style>
    两个页面都引用这一份，改这里两边一起变。 */
-    * {
-      box-sizing: border-box;
-    }
+* {
+  box-sizing: border-box;
+}
 
-    html,
-    body {
-      height: 100%;
-      margin: 0;
-    }
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
 
-    body {
-      background: #0f1115;
-      color: #e6e8ee;
-      font: 14px/1.5 -apple-system, "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
-      overflow: hidden;
-    }
+body {
+  background: #0f1115;
+  color: #e6e8ee;
+  font: 14px/1.5 -apple-system, "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+  overflow: hidden;
+}
 
-    #app {
-      display: flex;
-      flex-direction: column;
-      height: 100%;
-    }
+#app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
 
-    header {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: 10px;
-      padding: 12px 16px;
-      border-bottom: 1px solid #1c2029;
-    }
+header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-bottom: 1px solid #1c2029;
+}
 
-    .btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 7px 14px;
-      border-radius: 8px;
-      cursor: pointer;
-      background: #1b2029;
-      color: #e6e8ee;
-      border: 1px solid #2a3140;
-      font-size: 13px;
-      user-select: none;
-      transition: background .15s;
-    }
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  background: #1b2029;
+  color: #e6e8ee;
+  border: 1px solid #2a3140;
+  font-size: 13px;
+  user-select: none;
+  transition: background .15s;
+}
 
-    .btn:hover {
-      background: #232a36;
-    }
+.btn:hover {
+  background: #232a36;
+}
 
-    .btn.primary {
-      background: #2f81f7;
-      border-color: #2f81f7;
-      color: #fff;
-    }
+.btn.primary {
+  background: #2f81f7;
+  border-color: #2f81f7;
+  color: #fff;
+}
 
-    .btn.primary:hover {
-      background: #4a92ff;
-    }
+.btn.primary:hover {
+  background: #4a92ff;
+}
 
-    .btn:disabled {
-      opacity: .4;
-      cursor: not-allowed;
-    }
+.btn:disabled {
+  opacity: .4;
+  cursor: not-allowed;
+}
 
-    .chk {
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
-      font-size: 13px;
-      color: #a8b0c0;
-      cursor: pointer;
-    }
+.chk {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
+  color: #a8b0c0;
+  cursor: pointer;
+}
 
-    #vol {
-      width: 78px;
-      accent-color: #2f81f7;
-    }
+#vol {
+  width: 78px;
+  accent-color: #2f81f7;
+}
 
-    .chk select {
-      background: #1b2029;
-      color: #e6e8ee;
-      border: 1px solid #2a3140;
-      border-radius: 6px;
-      padding: 3px 6px;
-      font-size: 12px;
-    }
+.chk select {
+  background: #1b2029;
+  color: #e6e8ee;
+  border: 1px solid #2a3140;
+  border-radius: 6px;
+  padding: 3px 6px;
+  font-size: 12px;
+}
 
-    #status {
-      color: #8a92a4;
-      font-size: 13px;
-    }
+/* 谱面 / 键盘的「± 数字输入框」 */
+.chk input[type=number] {
+  width: 62px;
+  box-sizing: border-box;
+  padding: 3px 6px;
+  border: 1px solid #2a3140;
+  border-radius: 6px;
+  background: #1b2029;
+  color: #e6e8ee;
+  font-size: 12px;
+  font-family: inherit;
+  text-align: right;
+}
 
-    #time {
-      margin-left: auto;
-      color: #8a92a4;
-      font-variant-numeric: tabular-nums;
-      font-size: 13px;
-    }
+.chk input[type=number]:focus {
+  outline: none;
+  border-color: #2f81f7;
+  box-shadow: 0 0 0 2px rgba(47, 129, 247, .22);
+}
 
-    #bar {
-      height: 3px;
-      background: #1c2029;
-      flex: none;
-    }
+.chk input[type=number]::-webkit-inner-spin-button,
+.chk input[type=number]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
 
-    #barfill {
-      height: 100%;
-      width: 0;
-      background: linear-gradient(90deg, #2f81f7, #7ee787);
-    }
+.chk input[type=number]::placeholder {
+  color: #5b6577;
+  text-align: right;
+}
 
-    #board {
-      flex: none;
-      margin: auto 0;
-      overflow: hidden;
-      height: clamp(150px, 26vh, 260px);
-      display: flex;
-      flex-direction: column;
-      padding: 0 12px;
-    }
+#status {
+  color: #8a92a4;
+  font-size: 13px;
+}
 
-    #keys {
-      position: relative;
-      flex: 1 1 auto;
-    }
+#time {
+  margin-left: auto;
+  color: #8a92a4;
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+}
 
-    .key {
-      position: absolute;
-      bottom: 0;
-      overflow: hidden;
-      display: flex;
-      align-items: flex-end;
-      justify-content: center;
-      transition: background-color .06s linear;
-    }
+#bar {
+  height: 3px;
+  background: #1c2029;
+  flex: none;
+}
 
-    /* 白键：纯白，只靠 1px 内阴影做分隔线 */
-    .key.white {
-      height: 100%;
-      z-index: 1;
-      background: #ffffff;
-      border: none;
-      border-radius: 0 0 3px 3px;
-      /* 分隔线画在左边缘：宽度重叠 0.5px 时，自己的左边线不会被前一个键盖住 */
-      box-shadow: inset 1px 0 0 #dcdcdc;
-    }
+#barfill {
+  height: 100%;
+  width: 0;
+  background: linear-gradient(90deg, #2f81f7, #7ee787);
+}
 
-    /* 黑键：从后挡板往下伸，窄、短、圆角，高度由 JS 按滑块给定 */
-    .key.black {
-      top: 0;
-      bottom: auto;
-      z-index: 2;
-      background: linear-gradient(180deg, #3b3b3b 0%, #1d1d1d 14%, #101010 70%, #060606 100%);
-      border: none;
-      border-radius: 3px;
-      box-shadow: 0 2px 3px rgba(0, 0, 0, .45);
-    }
+#board {
+  flex: none;
+  margin: auto 0;
+  overflow: hidden;
+  height: clamp(150px, 26vh, 260px);
+  display: flex;
+  flex-direction: column;
+  padding: 0 12px;
+}
 
-    /* 按下 */
-    .key.white.on {
-      background: var(--c, #2f81f7);
-      box-shadow: inset 1px 0 0 rgba(0, 0, 0, .12);
-    }
+#keys {
+  position: relative;
+  flex: 1 1 auto;
+}
 
-    .key.black.on {
-      background: var(--c, #2f81f7);
-      box-shadow: 0 1px 2px rgba(0, 0, 0, .4);
-    }
+.key {
+  position: absolute;
+  bottom: 0;
+  overflow: hidden;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  transition: background-color .06s linear;
+}
 
-    /* 音名：字号由 JS 按键宽自适应 */
-    .lab {
-      font-weight: 500;
-      line-height: 1;
-      padding-bottom: 8px;
-      letter-spacing: .1px;
-      color: #3c3c3c;
-      pointer-events: none;
-      white-space: nowrap;
-    }
+/* 白键：纯白，靠 1px 内阴影做分隔线（太淡的话成片里白键会糊成一片，
+   这里用 #9aa3b0，配合录制画布里的同色竖线，1080 宽缩下去也还看得见） */
+.key.white {
+  height: 100%;
+  z-index: 1;
+  background: #ffffff;
+  border: none;
+  border-radius: 0 0 3px 3px;
+  /* 分隔线画在左边缘：宽度重叠 0.5px 时，自己的左边线不会被前一个键盖住 */
+  box-shadow: inset 1px 0 0 #9aa3b0;
+}
 
-    .key.black .lab {
-      padding-bottom: 6px;
-      color: #b4b4b4;
-    }
+/* 黑键：从后挡板往下伸，窄、短、圆角，高度由 JS 按滑块给定 */
+.key.black {
+  top: 0;
+  bottom: auto;
+  z-index: 2;
+  background: linear-gradient(180deg, #3b3b3b 0%, #1d1d1d 14%, #101010 70%, #060606 100%);
+  border: none;
+  border-radius: 3px;
+  box-shadow: 0 2px 3px rgba(0, 0, 0, .45);
+}
 
-    .key.white.on .lab {
-      color: #ffffff;
-    }
+/* 按下 */
+.key.white.on {
+  background: var(--c, #2f81f7);
+  box-shadow: inset 1px 0 0 rgba(0, 0, 0, .12);
+}
 
-    .key.black.on .lab {
-      color: #ffffff;
-    }
+.key.black.on {
+  background: var(--c, #2f81f7);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .4);
+}
+
+/* 音名：字号由 JS 按键宽自适应 */
+.lab {
+  font-weight: 500;
+  line-height: 1;
+  padding-bottom: 8px;
+  letter-spacing: .1px;
+  color: #3c3c3c;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.key.black .lab {
+  padding-bottom: 6px;
+  color: #b4b4b4;
+}
+
+.key.white.on .lab {
+  color: #ffffff;
+}
+
+.key.black.on .lab {
+  color: #ffffff;
+}
 
 
 
-    /* ---------- 五线谱面板 ---------- */
-    #scoreInfo {
-      flex: none;
-      padding: 7px 16px 8px;
-      background: #121620;
-      border-bottom: 1px solid #1c2029;
-      color: #c8d2e2;
-      font-size: 13px;
-      letter-spacing: .2px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
+/* ---------- 五线谱面板 ---------- */
+#scoreInfo {
+  flex: none;
+  padding: 7px 16px 8px;
+  background: #121620;
+  border-bottom: 1px solid #1c2029;
+  color: #c8d2e2;
+  font-size: 13px;
+  letter-spacing: .2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
-    #scoreInfo[hidden] {
-      display: none;
-    }
+#scoreInfo[hidden] {
+  display: none;
+}
 
-    #scoreInfo b {
-      color: #fff;
-      font-weight: 600;
-    }
+#scoreInfo b {
+  color: #fff;
+  font-weight: 600;
+}
 
-    #scoreInfo span {
-      color: #7f8a9e;
-    }
+#scoreInfo span {
+  color: #7f8a9e;
+}
 
-    #scoreWrap {
-      flex: 1 1 auto;
-      min-height: 0;
-      overflow: auto;
-      padding: 10px 14px 6px;
-      background: #121620;
-      border-bottom: 1px solid #1c2029;
-      scroll-behavior: smooth;
-      /* 换行时不要瞬移 */
-    }
+#scoreWrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 10px 14px 6px;
+  background: #121620;
+  border-bottom: 1px solid #1c2029;
+  scroll-behavior: smooth;
+  /* 换行时不要瞬移 */
+}
 
-    /* SVG 谱面 */
-    #svgWrap {
-      flex: 1 1 auto;
-      min-height: 0;
-      overflow: auto;
-      scroll-behavior: smooth;
-      padding: 10px 14px 8px;
-      background: #121620;
-      position: relative;
-    }
+/* SVG 谱面 */
+#svgWrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  scroll-behavior: smooth;
+  padding: 10px 14px 8px;
+  background: #121620;
+  position: relative;
+}
 
-    #svgWrap[hidden] {
-      display: none;
-    }
+#svgWrap[hidden] {
+  display: none;
+}
 
-    #svgHost {
-      position: relative;
-      /* 让 #svgCursor 以内容坐标系定位 */
-    }
+#svgHost {
+  position: relative;
+  /* 让 #svgCursor 以内容坐标系定位 */
+}
 
-    #svgHost .svgPage {
-      background: #fff;
-      border-radius: 10px;
-      box-shadow: inset 0 0 0 1px #e4ddcc;
-      margin: 0 auto 14px;
-      max-width: 100%;
-      overflow: hidden;
-    }
+#svgHost .svgPage {
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: inset 0 0 0 1px #e4ddcc;
+  margin: 0 auto 14px;
+  max-width: 100%;
+  overflow: hidden;
+}
 
-    #svgHost .svgPage svg {
-      display: block;
-      width: 100%;
-      height: auto;
-    }
+#svgHost .svgPage svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
 
-    /* 注意：必须是 absolute 并挂在 #svgHost 里，
+/* 注意：必须是 absolute 并挂在 #svgHost 里，
        否则手动滚动页面时框会钉在屏幕上、和音符脱开。 */
-    #svgCursor {
-      position: absolute;
-      z-index: 60;
-      display: none;
-      background: rgba(217, 43, 37, .16);
-      border: 2px solid rgba(217, 43, 37, .85);
-      border-radius: 5px;
-      pointer-events: none;
-    }
+#svgCursor {
+  position: absolute;
+  z-index: 60;
+  display: none;
+  background: rgba(217, 43, 37, .16);
+  border: 2px solid rgba(217, 43, 37, .85);
+  border-radius: 5px;
+  pointer-events: none;
+}
 
-    .Note.svghl {
-      fill: #d92b25 !important;
-    }
+.Note.svghl {
+  fill: #d92b25 !important;
+}
 
-    #scoreWrap[hidden] {
-      display: none;
-    }
+#scoreWrap[hidden] {
+  display: none;
+}
 
-    #score {
-      background: #fbf9f3;
-      border-radius: 10px;
-      padding: 4px 8px 2px;
-      box-shadow: inset 0 0 0 1px #e4ddcc;
-      display: block;
-      width: 100%;
-      box-sizing: border-box;
-      /* 自定义宽度（每行小节数）时水平居中；设成 100% 时这句不产生任何偏移 */
-      margin: 0 auto;
-    }
+#score {
+  background: #fbf9f3;
+  border-radius: 10px;
+  padding: 4px 8px 2px;
+  box-shadow: inset 0 0 0 1px #e4ddcc;
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  /* 自定义宽度（每行小节数）时水平居中；设成 100% 时这句不产生任何偏移 */
+  margin: 0 auto;
+}
 
-    /* OSMD 渲染出来的 SVG */
-    #score svg {
-      display: block;
-    }
+/* OSMD 渲染出来的 SVG */
+#score svg {
+  display: block;
+}
 
-    /* 竖向滚动框（自绘） */
-    #score {
-      position: relative;
-    }
+/* 竖向滚动框（自绘） */
+#score {
+  position: relative;
+}
 
-    #cursorBox {
-      position: absolute;
-      z-index: 5;
-      pointer-events: none;
-      display: none;
-      border-radius: 5px;
-      background: rgba(217, 43, 37, .20);
-      border: 2px solid rgba(217, 43, 37, .85);
-      box-shadow: 0 0 0 1px rgba(255, 255, 255, .55) inset;
-    }
+#cursorBox {
+  position: absolute;
+  z-index: 5;
+  pointer-events: none;
+  display: none;
+  border-radius: 5px;
+  background: rgba(217, 43, 37, .20);
+  border: 2px solid rgba(217, 43, 37, .85);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, .55) inset;
+}
 
 
-    .diag-card {
-      width: min(900px, 94vw);
-      max-height: 86vh;
-      display: flex;
-      flex-direction: column;
-    }
+.diag-card {
+  width: min(900px, 94vw);
+  max-height: 86vh;
+  display: flex;
+  flex-direction: column;
+}
 
-    .diag-card pre {
-      flex: 1 1 auto;
-      overflow: auto;
-      margin: 0 0 14px;
-      padding: 12px;
-      background: #0d1016;
-      border: 1px solid #232a36;
-      border-radius: 8px;
-      color: #c9d3e0;
-      font: 12px/1.55 ui-monospace, Consolas, "Courier New", monospace;
-      white-space: pre-wrap;
-      word-break: break-all;
-      max-height: 62vh;
-    }
+/* 「音符信息」弹窗：按组的表格很宽，用不折行的等宽排版 + 横向滚动 */
+.modal-card.info-card {
+  width: min(1000px, 96vw);
+}
 
-    #app.has-score #board {
-      height: clamp(104px, 19vh, 180px);
-    }
+.modal-card.info-card pre {
+  white-space: pre;
+  word-break: normal;
+  font-size: 12px;
+  line-height: 1.5;
+}
 
-    footer {
-      flex: none;
-      display: flex;
-      flex-wrap: wrap;
-      gap: 14px;
-      align-items: center;
-      padding: 10px 16px 14px;
-      font-size: 12px;
-      color: #8a92a4;
-    }
+.diag-card pre {
+  flex: 1 1 auto;
+  overflow: auto;
+  margin: 0 0 14px;
+  padding: 12px;
+  background: #0d1016;
+  border: 1px solid #232a36;
+  border-radius: 8px;
+  color: #c9d3e0;
+  font: 12px/1.55 ui-monospace, Consolas, "Courier New", monospace;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 62vh;
+}
 
-    .lg {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-    }
+footer {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-items: center;
+  padding: 10px 16px 14px;
+  font-size: 12px;
+  color: #8a92a4;
+}
 
-    .lg i {
-      width: 10px;
-      height: 10px;
-      border-radius: 3px;
-      display: inline-block;
-    }
+.lg {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
 
-    .lg b {
-      color: #6b7385;
-      font-weight: 500;
-    }
+.lg i {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  display: inline-block;
+}
 
-    .hint {
-      margin-left: auto;
-    }
+.lg b {
+  color: #6b7385;
+  font-weight: 500;
+}
 
-    /* ---------- 导出弹窗 ---------- */
-    .modal {
-      position: fixed;
-      inset: 0;
-      z-index: 50;
-      background: rgba(6, 8, 12, .72);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
+.hint {
+  margin-left: auto;
+}
 
-    .modal[hidden] {
-      display: none;
-    }
+/* ---------- 导出弹窗 ---------- */
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(6, 8, 12, .72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
 
-    .modal-card {
-      width: 340px;
-      padding: 20px 22px;
-      background: #14181f;
-      border: 1px solid #2a3140;
-      border-radius: 12px;
-      box-shadow: 0 24px 60px rgba(0, 0, 0, .65);
-    }
+.modal[hidden] {
+  display: none;
+}
 
-    .modal-card h3 {
-      margin: 0 0 16px;
-      font-size: 15px;
-      font-weight: 600;
-    }
+.modal-card {
+  width: 340px;
+  padding: 20px 22px;
+  background: #14181f;
+  border: 1px solid #2a3140;
+  border-radius: 12px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, .65);
+}
 
-    .modal-card label {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 10px;
-      margin-bottom: 12px;
-      font-size: 13px;
-      color: #b7bec9;
-    }
+.modal-card h3 {
+  margin: 0 0 16px;
+  font-size: 15px;
+  font-weight: 600;
+}
 
-    .modal-card select {
-      background: #1b2029;
-      color: #e6e8ee;
-      border: 1px solid #2a3140;
-      border-radius: 7px;
-      padding: 5px 8px;
-      font-size: 13px;
-    }
+.modal-card label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+  font-size: 13px;
+  color: #b7bec9;
+}
 
-    .modal-card .tip {
-      margin: 4px 0 16px;
-      font-size: 12px;
-      line-height: 1.6;
-      color: #7c8494;
-    }
+.modal-card select {
+  background: #1b2029;
+  color: #e6e8ee;
+  border: 1px solid #2a3140;
+  border-radius: 7px;
+  padding: 5px 8px;
+  font-size: 13px;
+}
 
-    .modal-card .row {
-      display: flex;
-      justify-content: flex-end;
-      gap: 8px;
-    }
+.modal-card .tip {
+  margin: 4px 0 16px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #7c8494;
+}
 
-    /* ===== 对照流：白底黑谱 ===== */
-    #svgHost {
-      position: relative;
-      color: #000;
-    }
+/* 「谱面信息」弹窗：三个上下排列的输入行 */
+.modal-card .head-field {
+  display: block;
+  margin-bottom: 10px;
+}
 
-    .flowSys,
-    .flowJp {
-      background: #ffffff;
-      border-radius: 10px;
-      box-sizing: border-box;
-      overflow: hidden;
-    }
+.modal-card .head-field span {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 12px;
+  color: #b7bec9;
+}
 
-    .flowSys {
-      padding: 0px 10px;
-      margin: 0 auto 0;
-      border-radius: 10px 10px 0 0;
+.modal-card .head-field input[type=text] {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border: 1px solid #2a3140;
+  border-radius: 7px;
+  background: #1b2029;
+  color: #e6e8ee;
+  font-size: 13px;
+  font-family: inherit;
+}
 
-    }
+.modal-card .head-field input[type=text]:focus {
+  outline: none;
+  border-color: #2f81f7;
+  box-shadow: 0 0 0 2px rgba(47, 129, 247, .22);
+}
 
-    .flowJp {
-      padding: 10px 0px;
-      margin: -25px -10px 0 0;
-      border-radius: 0 0 10px 10px;
+/* 字幕弹窗：多行文本框 */
+.modal-card .head-field textarea {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px;
+  border: 1px solid #2a3140;
+  border-radius: 7px;
+  background: #1b2029;
+  color: #e6e8ee;
+  font-size: 13px;
+  line-height: 1.6;
+  font-family: inherit;
+  resize: vertical;
+  min-height: 120px;
+}
 
-      color: #000;
-    }
+.modal-card .head-field textarea:focus {
+  outline: none;
+  border-color: #2f81f7;
+  box-shadow: 0 0 0 2px rgba(47, 129, 247, .22);
+}
 
-    /* 简谱的时值线是 box-shadow(不写颜色) → 取 currentColor */
-    .flowJp,
-    .flowJp * {
-      color: #000;
-    }
+.modal-card.cap-card {
+  width: 420px;
+}
 
-    .flowSys svg {
-      display: block;
-      margin: 0 auto;
-    }
+.modal-card .row {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
 
-    .flowSys svg,
-    .flowSys svg * {
-      color: #000;
-    }
+/* ===== 对照流：白底黑谱 ===== */
+#svgHost {
+  position: relative;
+  color: #000;
+}
 
-    /* 简谱当前音符的高亮块：出现时做一个极短的提亮过渡，眼睛更容易跟上 */
-    .flowJp .SparksNMN-notehl {
-      transition: opacity .1s linear;
-    }
+.flowSys,
+.flowJp {
+  background: #ffffff;
+  border-radius: 10px;
+  box-sizing: border-box;
+  overflow: hidden;
+}
 
-    /* 音符落点：短促提亮一下再回落，扫谱时更容易抓住 */
-    @keyframes jpNotePop {
-      0% { filter: brightness(1.42) saturate(1.8); }
-      100% { filter: saturate(1.4); }
-    }
+.flowSys {
+  padding: 0px 10px;
+  margin: 0 auto 0;
+  border-radius: 10px 10px 0 0;
 
-    .flowJp .jpHit {
-      animation: jpNotePop .24s ease-out;
-    }
+}
 
-    /* 音符染色 */
-    .Note.svghl {
-      fill: #d92b25 !important;
-    }
+.flowJp {
+  padding: 10px 0px;
+  margin: -25px -10px 0 0;
+  border-radius: 0 0 10px 10px;
+  /* 和 sparks 导出的 .wcl-equifield-root 一致：它决定字形在行盒里的落点，
+         改了简谱的八度点/数字相对位置就会跟着偏 */
+  line-height: 1.15;
 
-    #svgCursor {
-      position: absolute;
-      z-index: 60;
-      display: none;
-      background: rgba(217, 43, 37, .16);
-      border: 2px solid rgba(217, 43, 37, .85);
-      border-radius: 5px;
-      pointer-events: none;
-    }
+  color: #000;
+}
 
-    /* 键盘左右留出间隔，不铺满整行 */
-    #board {
-      padding-left: 25%;
-      padding-right: 25%;
-      box-sizing: border-box;
-    }
+/* 简谱的时值线是 box-shadow(不写颜色) → 取 currentColor */
+.flowJp,
+.flowJp * {
+  color: #000;
+}
 
-    /* 键盘高度调低（原来 clamp(104px,19vh,180px)） */
-    #board {
-      height: clamp(104px, 11vh, 150px);
-    }
+.flowSys svg {
+  display: block;
+  margin: 0 auto;
+}
 
-    /* ===== 竖屏基准布局 ===== */
-    body {
-      display: flex;
-      justify-content: center;
-      align-items: stretch;
-      background: #07090c;
-    }
+.flowSys svg,
+.flowSys svg * {
+  color: #000;
+}
 
-    #app {
-      width: 100%;
-      max-width: 56.25vh;
-      /* 9:16 竖屏 */
-      margin: 0 auto;
-      height: 100vh;
-      overflow: hidden;
-      box-shadow: 0 0 0 1px #1c2029;
-    }
+/* 简谱当前音符的高亮块：出现时做一个极短的提亮过渡，眼睛更容易跟上 */
+.flowJp .SparksNMN-notehl {
+  transition: opacity .1s linear;
+}
 
-    /* 竖屏下页头容易挤，允许换行并压缩间距 */
-    header {
-      flex-wrap: wrap;
-      gap: 4px;
-      padding: 6px 8px;
-    }
+/* 音符落点：短促提亮一下再回落，扫谱时更容易抓住 */
+@keyframes jpNotePop {
+  0% {
+    filter: brightness(1.42) saturate(1.8);
+  }
 
-    header .btn,
-    header .chk {
-      font-size: 12px;
-      padding: 4px 8px;
-    }
+  100% {
+    filter: saturate(1.4);
+  }
+}
 
-    /* 竖屏下键盘几乎占满竖列宽度 */
-    #board {
-      padding-left: 2% !important;
-      padding-right: 2% !important;
-    }
+.flowJp .jpHit {
+  animation: jpNotePop .24s ease-out;
+}
 
-    /* ===== 左：控制栏  右：谱面 + 键盘 ===== */
-    body {
-      display: block;
-      background: #07090c;
-    }
+/* ===== 横版（16:9）：五线谱 + 简谱排成一条横向滚动的带子 =====
+   由页面在加载 core 之前设 window.KB_HORIZ = true 后，buildFlow() 会重建这种结构；
+   竖版页面没有 #svgHost.hFlow，下面这些规则一条都不会命中。 */
+#svgHost.hFlow {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  width: max-content;
+  min-width: 100%;
+  min-height: 100%;
+  /* 顶部留一点空隙：五线谱不贴谱面区上沿 */
+  padding: 12px 0 6px;
+  box-sizing: border-box;
+}
 
-    #app {
-      display: flex;
-      flex-direction: row;
-      width: 100%;
-      max-width: none;
-      height: 100vh;
-      margin: 0;
-      overflow: hidden;
-      box-shadow: none;
-      gap: 0;
-    }
+#svgHost.hFlow .flowCol {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  margin-right: 22px;
+}
 
-    /* 左侧控制栏 */
-    header {
-      width: 290px;
-      flex: 0 0 290px;
-      display: flex;
-      flex-direction: column;
-      /* 竖向控制栏绝不换行：内容比视口高时只纵向滚动，
+#svgHost.hFlow .flowCol:last-child {
+  margin-right: 0;
+}
+
+#svgHost.hFlow .flowSys {
+  margin: 0;
+  padding: 0 8px;
+  border-radius: 8px 8px 0 0;
+}
+
+#svgHost.hFlow .flowJp {
+  margin: 0;
+  padding: 4px 0 6px;
+  border-radius: 0 0 8px 8px;
+}
+
+/* 音符染色 */
+.Note.svghl {
+  fill: #d92b25 !important;
+}
+
+#svgCursor {
+  position: absolute;
+  z-index: 60;
+  display: none;
+  background: rgba(217, 43, 37, .16);
+  border: 2px solid rgba(217, 43, 37, .85);
+  border-radius: 5px;
+  pointer-events: none;
+}
+
+/* 键盘左右留出间隔，不铺满整行 */
+#board {
+  padding-left: 25%;
+  padding-right: 25%;
+  box-sizing: border-box;
+}
+
+/* 键盘高度调低（原来 clamp(104px,19vh,180px)） */
+#board {
+  height: clamp(104px, 11vh, 150px);
+}
+
+/* ===== 竖屏基准布局 ===== */
+body {
+  display: flex;
+  justify-content: center;
+  align-items: stretch;
+  background: #07090c;
+}
+
+#app {
+  width: 100%;
+  max-width: 56.25vh;
+  /* 9:16 竖屏 */
+  margin: 0 auto;
+  height: 100vh;
+  overflow: hidden;
+  box-shadow: 0 0 0 1px #1c2029;
+}
+
+/* 竖屏下页头容易挤，允许换行并压缩间距 */
+header {
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 6px 8px;
+}
+
+header .btn,
+header .chk {
+  font-size: 12px;
+  padding: 4px 8px;
+}
+
+/* 竖屏下键盘几乎占满竖列宽度 */
+#board {
+  padding-left: 2% !important;
+  padding-right: 2% !important;
+}
+
+/* ===== 左：控制栏  右：谱面 + 键盘 ===== */
+body {
+  display: block;
+  background: #07090c;
+}
+
+#app {
+  display: flex;
+  flex-direction: row;
+  width: 100%;
+  max-width: none;
+  height: 100vh;
+  margin: 0;
+  overflow: hidden;
+  box-shadow: none;
+  gap: 0;
+}
+
+/* 左侧控制栏 */
+header {
+  width: 290px;
+  flex: 0 0 290px;
+  display: flex;
+  flex-direction: column;
+  /* 竖向控制栏绝不换行：内容比视口高时只纵向滚动，
          否则会折出第二列（按钮被挤到侧栏右边，页面出现横向滚动条） */
-      flex-wrap: nowrap;
-      align-items: stretch;
-      gap: 6px;
-      overflow-x: hidden;
-      overflow-y: auto;
-      padding: 12px;
-      border-right: 1px solid #1c2029;
-      background: #0b0e13;
-    }
+  flex-wrap: nowrap;
+  align-items: stretch;
+  gap: 6px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 12px;
+  border-right: 1px solid #1c2029;
+  background: #0b0e13;
+}
 
-    header .btn,
-    header .chk,
-    header .hgroup {
-      width: 100%;
-    }
+header .btn,
+header .chk,
+header .hgroup {
+  width: 100%;
+}
 
-    header .btn {
-      text-align: left;
-    }
+header .btn {
+  text-align: left;
+}
 
-    #status {
-      width: 100%;
-      white-space: normal;
-      line-height: 1.5;
-      margin-top: 8px;
-      color: #8b97ab;
-    }
+/* 侧栏分区标题（合并页的「切换平台 / 操作」两区） */
+.side-label {
+  width: 100%;
+  margin: 6px 0 -1px;
+  font-size: 12px;
+  letter-spacing: .04em;
+  color: #6b7688;
+}
+.side-label:first-child { margin-top: 0; }
 
-    header input[type=range] {
-      width: 100%;
-    }
+/* 平台切换：三个等宽按钮，选中的那个用平台色 */
+.plat-tabs {
+  display: flex;
+  width: 100%;
+  gap: 6px;
+}
+header .plat-tabs .btn {
+  flex: 1 1 0;
+  width: auto;
+  padding: 8px 0;
+  justify-content: center;
+  text-align: center;
+  font-weight: 600;
+}
+.plat-tabs .btn.on[data-plat="xhs"] {
+  background: #ff2442;
+  border-color: #ff2442;
+  color: #fff;
+}
+.plat-tabs .btn.on[data-plat="dy"] {
+  background: #25f4ee;
+  border-color: #25f4ee;
+  color: #10231f;
+}
+.plat-tabs .btn.on[data-plat="ks"] {
+  background: #ff5000;
+  border-color: #ff5000;
+  color: #fff;
+}
+.plat-hint {
+  width: 100%;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #7d8899;
+}
+.side-sep {
+  width: 100%;
+  height: 1px;
+  margin: 4px 0;
+  background: #1c2029;
+}
 
-    /* 右侧舞台：谱面 + 键盘 */
-    .stage {
-      flex: 1 1 auto;
-      min-width: 0;
-      display: flex;
-      flex-direction: column;
-      height: 100%;
-      overflow: hidden;
-      border-left: 1px solid #141922;
-    }
+#status {
+  width: 100%;
+  white-space: normal;
+  line-height: 1.5;
+  margin-top: 8px;
+  color: #8b97ab;
+}
 
-    .stage #bar {
-      flex: none;
-    }
+header input[type=range] {
+  width: 100%;
+}
 
-    .stage #scoreInfo {
-      flex: none;
-    }
+/* 右侧舞台：谱面 + 键盘 */
+.stage {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  border-left: 1px solid #141922;
+  /* 底部字幕、谱面光标等绝对定位元素都以舞台为参照（否则会以窗口为参照，跑偏） */
+  position: relative;
+}
 
-    .stage #svgWrap {
-      flex: 1 1 auto;
-      min-height: 0;
-      overflow: auto;
-    }
+.stage #bar {
+  flex: none;
+}
 
-    .stage #board {
-      flex: none;
-    }
+.stage #scoreInfo {
+  flex: none;
+}
 
-    .stage #legend {
-      flex: none;
-    }
+.stage #svgWrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
 
-    /* 竖屏不再限制整页宽度，改由右侧舞台自适应 */
+.stage #board {
+  flex: none;
+  /* 键盘高度：--kb-key-h 由引擎按「1080 宽下的琴键高」换算后写进来
+     （编辑页 540 宽就是一半，录制页 1080 宽就是原值），没设过就按内容高度 */
+  height: var(--kb-key-h, auto);
+}
 
-    /* ===== 右侧舞台固定 9:16，水平居中 ===== */
-    .stage {
-      flex: 0 0 auto;
-      height: 100%;
-      aspect-ratio: 3 / 4;
-      /* 竖屏改用 3:4 */
-      width: auto;
-      max-width: calc(100% - 2px);
-      margin: 0 auto;
-      background: #0b0e13;
-      box-shadow: 0 0 0 1px #1c2029;
-      overflow: hidden;
-    }
+.stage #legend {
+  flex: none;
+}
 
-    /* 键盘固定在舞台底部（不随剩余空间垂直居中） */
-    .stage #board {
-      margin-top: auto;
-      margin-bottom: 0;
-    }
+/* 竖屏不再限制整页宽度，改由右侧舞台自适应 */
 
-    /* 舞台白底 */
-    .stage {
-      background: #ffffff;
-    }
+/* ===== 右侧舞台固定 9:16（竖屏手机比例），水平居中 ===== */
+.stage {
+  flex: 0 0 auto;
+  /* 9:16；宽度同时受「窗口宽 − 左侧栏 292px」限制，
+         窗口不够宽时整体等比缩小，而不是顶出画面被裁掉 */
+  width: min(calc(100vh * 9 / 16), calc(100vw - 292px));
+  height: min(100vh, calc((100vw - 292px) * 16 / 9));
+  align-self: center;
+  margin: 0 auto;
+  background: #0b0e13;
+  box-shadow: 0 0 0 1px #1c2029;
+  overflow: hidden;
+}
 
-    .stage #svgWrap {
-      background: #ffffff;
-    }
+/* 键盘固定在舞台底部（不随剩余空间垂直居中）；
+       --kb-lift 由引擎按「键盘高度 × KB_BOARD_LIFT（默认 0.3）」设，实现整体上移、下方留白 */
+.stage #board {
+  margin-top: auto;
+  margin-bottom: var(--kb-lift, 0px);
+}
 
-    /* 隐藏谱面区滚动条（保留滚动功能） */
-    .stage #svgWrap {
-      scrollbar-width: none;
-      /* Firefox */
-      -ms-overflow-style: none;
-      /* 旧 Edge */
-    }
+/* 舞台白底 */
+.stage {
+  background: #ffffff;
+}
 
-    .stage #svgWrap::-webkit-scrollbar {
-      width: 0;
-      height: 0;
-      display: none;
-    }
+.stage #svgWrap {
+  background: #ffffff;
+}
 
-    /* 曲名信息不再放在舞台内，改到左侧 */
-    .stage #scoreInfo {
-      display: none !important;
-    }
+/* 隐藏谱面区滚动条（保留滚动功能） */
+.stage #svgWrap {
+  scrollbar-width: none;
+  /* Firefox */
+  -ms-overflow-style: none;
+  /* 旧 Edge */
+}
 
-    .side-info {
-      display: block;
-      margin-bottom: 10px;
-      padding-bottom: 8px;
-      border-bottom: 1px solid #1c2029;
-      color: #cfd8e6;
-      font-size: 13px;
-      line-height: 1.6;
-      word-break: break-all;
-    }
+.stage #svgWrap::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
 
-    .side-info b {
-      color: #fff;
-    }
+/* 曲名信息不再放在舞台内，改到左侧 */
+.stage #scoreInfo {
+  display: none !important;
+}
 
-    /* 底部图例/提示移到左侧 */
-    .stage #legend {
-      display: none !important;
-    }
+.side-info {
+  display: block;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #1c2029;
+  color: #cfd8e6;
+  font-size: 13px;
+  line-height: 1.6;
+  word-break: break-all;
+}
 
-    .side-legend {
-      display: block;
-      margin-top: 10px;
-      padding-top: 8px;
-      border-top: 1px solid #1c2029;
-      color: #8b97ab;
-      font-size: 12px;
-      line-height: 1.7;
-    }
+.side-info b {
+  color: #fff;
+}
 
-    /* 键盘区：深色底，与白色谱面区分开 */
-    .stage #board {
-      background: #12161d;
-      border-top: 1px solid #232833;
-      padding-top: 6px;
-      padding-bottom: 6px;
-    }
+/* 底部图例/提示移到左侧 */
+.stage #legend {
+  display: none !important;
+}
 
-    /* 简谱只做音符高亮，不再画播放框（高亮块由 efData 的 SparksNMN-notehl 提供） */
+.side-legend {
+  display: block;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid #1c2029;
+  color: #8b97ab;
+  font-size: 12px;
+  line-height: 1.7;
+}
 
-    /* ===== 左侧栏排版优化 ===== */
-    header {
-      gap: 0 !important;
-      padding: 14px 12px 18px !important;
-    }
+/* ===== 谱面顶部信息：曲名 + 1=X | NN BPM | 4/4 ===== */
+#scoreHead {
+  position: relative;
+  flex: none;
+  /* 顶部留白由「标题距顶」按钮调（--kb-head-top），左右/底部固定 */
+  padding: var(--kb-head-top, 10px) 12px 8px;
+  text-align: center;
+  /* 底色和谱面一致（纯白），靠留白和字号区分层次 */
+  background: #ffffff;
+  color: #111827;
+}
 
-    /* 歌曲信息块 */
-    .side-info {
-      display: block;
-      margin: 0 0 14px;
-      padding: 0 0 12px;
-      border-bottom: 1px solid #232833;
-      line-height: 1.55;
-    }
+/* ===== 底部字幕：键盘下方那块空白里，按曲长一行一行显示 ===== */
+.kb-caption {
+  position: absolute;
+  left: 0;
+  right: 0;
+  /* 「距底边」是按 1080×1920 成片写的 px（和平台参数一致），
+     编辑页（540 宽）乘 0.5 显示，录制页原样 —— 预览与成片位置相同。
+     但不超过键盘下方那块空白（--kb-lift） */
+  bottom: min(calc(var(--kb-caption-bottom, 28px) * var(--kb-px-scale, 1)), var(--kb-lift, 28px));
+  max-height: var(--kb-lift, 40px);
+  overflow: hidden;
+  padding: 0 calc(24px * var(--kb-ui-scale, 1));
+  /* 水平方向始终在舞台上居中 */
+  text-align: center;
+  /* 字号也随画布放大：编辑页 22px，录制页（1080×1920）自动变成 44px */
+  font-size: calc(22px * var(--kb-ui-scale, 1));
+  line-height: 1.5;
+  font-weight: 500;
+  color: #111827;
+  letter-spacing: .02em;
+  white-space: pre-wrap;
+  word-break: break-word;
+  pointer-events: none;
+  z-index: 5;
+}
 
-    .side-info b {
-      display: block;
-      font-size: 15px;
-      font-weight: 600;
-      color: #eef2f8;
-      margin-bottom: 3px;
-    }
+/* 「距底边」留空 = 在键盘下方那块空白里上下左右都居中 */
+.kb-caption.center {
+  bottom: 0;
+  height: var(--kb-lift, 40px);
+  max-height: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: visible;
+}
 
-    .side-info span {
-      display: block;
-      font-size: 12px;
-      color: #7d8899;
-    }
+.kb-caption[hidden] {
+  display: none !important;
+}
 
-    /* 按钮统一高度与间距 */
-    header .btn {
-      height: 32px;
-      margin-bottom: 6px;
-      border-radius: 8px;
-      font-size: 13px;
-      display: flex;
-      align-items: center;
-    }
+/* 顶栏下面的播放进度条：有谱面信息时轨道也用白色（不画分隔线），
+       播放时才浮出那条彩色进度；播放页没有 #scoreHead，保持原来的深色细条 */
+#scoreHead+#bar {
+  height: 3px;
+  background: #ffffff;
+  /* 进度条和下面的谱面留一点空隙（10px，成片里也是 10px：录制页是 1:1 画的） */
+  margin-bottom: 10px;
+}
 
-    /* 勾选项行高对齐 */
-    header .chk {
-      height: 28px;
-      margin-bottom: 6px;
-      font-size: 13px;
-      color: #b9c3d2;
-    }
+#scoreHead+#bar #barfill {
+  background: linear-gradient(90deg, #4a92ff, #57c8a4);
+}
 
-    /* 状态文字 */
-    #status {
-      margin-top: 4px !important;
-      font-size: 12px;
-      color: #6f7b8d;
-      line-height: 1.6;
-    }
+#scoreHead .sh-title {
+  /* 字号可在「作品信息」弹窗里用数字改（--kb-head-title-size） */
+  font-size: var(--kb-head-title-size, 25px);
+  font-weight: 700;
+  line-height: 1.35;
+  letter-spacing: .01em;
+  min-height: 34px;
+}
 
-    /* 图例 */
-    .side-legend {
-      margin-top: 12px;
-      padding-top: 10px;
-      font-size: 12px;
-      color: #6f7b8d;
-    }
+/* 集合 + 副标题这一行：集合绝对定位在左，副标题照旧居中，两者同高对齐。
+   margin 左右 -12px 是为了让绝对定位的 left 从舞台左边缘量起（#scoreHead 有 12px 左右内边距） */
+#scoreHead .sh-row {
+  position: relative;
+  margin: 1px -12px 0;
+}
 
-    /* 隐藏发声 / 音量 */
-    #soundChk,
-    #vol {
-      display: none !important;
-    }
+/* 只填了集合、没有副标题时，保留一行高度，别让它压到谱面信息 */
+#scoreHead .sh-row.col-only {
+  min-height: calc(18px * var(--kb-ui-scale, 1));
+}
 
-    /* 歌曲信息固定在左侧栏底部 */
-    .side-info {
-      margin: auto 0 0 !important;
-      /* 顶到最下面 */
-      padding: 12px 0 0 !important;
-      border-bottom: none !important;
-      border-top: 1px solid #232833;
-    }
+/* 集合信息贴右边时用（页面里写了 window.KB_COL_RIGHT 才会加上 .to-right） */
+#scoreHead .sh-col.to-right {
+  left: auto;
+  right: var(--kb-col-right, 30px);
+}
 
-    /* ===== 勾选框：与按钮同款圆角风格 ===== */
-    header .chk input[type=checkbox] {
-      -webkit-appearance: none;
-      appearance: none;
-      width: 17px;
-      height: 17px;
-      margin: 0 8px 0 0;
-      border: 1px solid #39414f;
-      border-radius: 6px;
-      background: #151a22;
-      cursor: pointer;
-      position: relative;
-      flex: none;
-      transition: background-color .15s, border-color .15s;
-    }
+/* 集合信息（例如「原神谱 · 4期」）：和副标题同一行，靠左 30px 处。
+   高度撑满这一行 + flex 居中 => 与副标题同一条线；改左右位置只动 left / right */
+#scoreHead .sh-col {
+  position: absolute;
+  /* 左右位置由 --kb-col-left / --kb-col-right 控制（页面里 window.KB_COL_LEFT / KB_COL_RIGHT） */
+  left: var(--kb-col-left, 30px);
+  right: auto;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  /* 字号跟着舞台宽等比（--kb-ui-scale：540 宽 = 1，录制页 1080 宽 = 2） */
+  font-size: calc(14px * var(--kb-ui-scale, 1));
+  font-weight: 500;
+  letter-spacing: .06em;
+  color: #8a93a6;
+  white-space: nowrap;
+  /* 集合太长时截断，避免压到居中的副标题 */
+  max-width: calc(50% - 70px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
-    header .chk input[type=checkbox]:hover {
-      border-color: #4a566a;
-    }
+/* 作品信息：集合那一行居中的那句（例如「原神 · 璃月」），由左侧「作品信息」按钮设置 */
+#scoreHead .sh-sub {
+  /* 数字按「540 宽」填，乘舞台比例交给这里（--kb-ui-scale 随窗口变，不用重算） */
+  font-size: calc(var(--kb-head-sub-size, 13px) * var(--kb-ui-scale, 1));
+  line-height: 1.4;
+  color: #7a8699;
+  letter-spacing: .04em;
+}
 
-    header .chk input[type=checkbox]:checked {
-      background: #2f81f7;
-      border-color: #2f81f7;
-    }
+#scoreHead .sh-meta {
+  margin-top: 2px;
+  font-size: calc(12px * var(--kb-ui-scale, 1));
+  color: #6b7280;
+  letter-spacing: .02em;
+  font-variant-numeric: tabular-nums;
+}
 
-    /* 对勾 */
-    header .chk input[type=checkbox]:checked::after {
-      content: '';
-      position: absolute;
-      left: 5px;
-      top: 1.5px;
-      width: 5px;
-      height: 9px;
-      border: solid #fff;
-      border-width: 0 2px 2px 0;
-      transform: rotate(45deg);
-    }
+/* 键盘区：深色底，与白色谱面区分开 */
+.stage #board {
+  background: #12161d;
+  border-top: 1px solid #232833;
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
 
-    header .chk {
-      display: flex;
-      align-items: center;
-      gap: 0;
-      cursor: pointer;
-    }
+/* 简谱只做音符高亮，不再画播放框（高亮块由 efData 的 SparksNMN-notehl 提供） */
 
-    /* 下拉框也统一圆角 */
-    header .chk select {
-      border-radius: 6px;
-      height: 26px;
-      padding: 0 6px;
-      border: 1px solid #39414f;
-      background: #151a22;
-      color: #c9d3e2;
-    }
+/* ===== 左侧栏排版优化 ===== */
+header {
+  gap: 0 !important;
+  padding: 14px 12px 18px !important;
+}
+
+/* 歌曲信息块 */
+.side-info {
+  display: block;
+  margin: 0 0 14px;
+  padding: 0 0 12px;
+  border-bottom: 1px solid #232833;
+  line-height: 1.55;
+}
+
+.side-info b {
+  display: block;
+  font-size: 15px;
+  font-weight: 600;
+  color: #eef2f8;
+  margin-bottom: 3px;
+}
+
+.side-info span {
+  display: block;
+  font-size: 12px;
+  color: #7d8899;
+}
+
+/* 按钮统一高度与间距 */
+header .btn {
+  height: 32px;
+  margin-bottom: 6px;
+  border-radius: 8px;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+}
+
+/* 勾选项行高对齐 */
+header .chk {
+  height: 28px;
+  margin-bottom: 6px;
+  font-size: 13px;
+  color: #b9c3d2;
+}
+
+/* 状态文字 */
+#status {
+  margin-top: 4px !important;
+  font-size: 12px;
+  color: #6f7b8d;
+  line-height: 1.6;
+}
+
+/* 图例 */
+.side-legend {
+  margin-top: 12px;
+  padding-top: 10px;
+  font-size: 12px;
+  color: #6f7b8d;
+}
+
+/* 隐藏发声 / 音量 */
+#soundChk,
+#vol {
+  display: none !important;
+}
+
+/* 歌曲信息固定在左侧栏底部 */
+.side-info {
+  margin: auto 0 0 !important;
+  /* 顶到最下面 */
+  padding: 12px 0 0 !important;
+  border-bottom: none !important;
+  border-top: 1px solid #232833;
+}
+
+/* ===== 勾选框：与按钮同款圆角风格 ===== */
+header .chk input[type=checkbox] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 17px;
+  height: 17px;
+  margin: 0 8px 0 0;
+  border: 1px solid #39414f;
+  border-radius: 6px;
+  background: #151a22;
+  cursor: pointer;
+  position: relative;
+  flex: none;
+  transition: background-color .15s, border-color .15s;
+}
+
+header .chk input[type=checkbox]:hover {
+  border-color: #4a566a;
+}
+
+header .chk input[type=checkbox]:checked {
+  background: #2f81f7;
+  border-color: #2f81f7;
+}
+
+/* 对勾 */
+header .chk input[type=checkbox]:checked::after {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 1.5px;
+  width: 5px;
+  height: 9px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+header .chk {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  cursor: pointer;
+}
+
+/* 下拉框也统一圆角 */
+header .chk select {
+  border-radius: 6px;
+  height: 26px;
+  padding: 0 6px;
+  border: 1px solid #39414f;
+  background: #151a22;
+  color: #c9d3e2;
+}
+
+/* 导出视频（后台服务版）弹窗：进度条 + 结果按钮 */
+.svc-modal .modal-card {
+  width: min(94vw, 470px);
+}
+
+.svc-modal .modal-card input[type=text] {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid #39414f;
+  background: #151a22;
+  color: #e6ebf2;
+  font-size: 12px;
+}
+
+.svc-modal .modal-card input[type=text]:focus {
+  outline: none;
+  border-color: #3b82f6;
+}
+
+/* 「歌曲文件夹」这种一行文字 + 长输入框：文字不折行，输入框吃掉剩余宽度 */
+.svc-modal .modal-card > label {
+  white-space: nowrap;
+  gap: 8px;
+}
+
+.svc-modal .modal-card > label > input[type=text] {
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 0;
+}
+
+.svc-bar {
+  height: 8px;
+  margin: 12px 0 8px;
+  border-radius: 5px;
+  background: #1d222b;
+  overflow: hidden;
+}
+
+.svc-bar > i {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: 5px;
+  background: linear-gradient(90deg, #2f81f7, #3ddc97);
+  transition: width .25s linear;
+}
+
+.svc-txt {
+  font-size: 12px;
+  line-height: 1.7;
+  color: #9aa6b6;
+  word-break: break-all;
+}
+
+.svc-txt b {
+  color: #e6ebf2;
+  font-weight: 600;
+}
+
+.svc-txt .ok {
+  color: #3ddc97;
+}
+
+.svc-txt .bad {
+  color: #ff7b72;
+}
+
+/* .btn 是 display:flex，会盖掉 [hidden] 的默认 display:none —— 这里补回来 */
+.svc-modal .row .btn[hidden] {
+  display: none !important;
+}
+.svc-modal .modal-card > label[hidden] {
+  display: none !important;
+}
+/* 就地录制时页面正在被录，弹窗里留一行提示就好 */
+
+/* 横版：副标题放在标题右侧，间隔 50px（竖版仍是上下两行） */
+#scoreHead.h-head .sh-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 50px;
+  flex-wrap: nowrap;
+}
+#scoreHead.h-head .sh-title .sh-sub {
+  display: block;
+  white-space: nowrap;
+}
+/* 横版：集合信息浮在左上角，字号跟着标题走（竖版仍在副标题那一行的左边） */
+#scoreHead.h-head {
+  position: relative;
+}
+#scoreHead.h-head .sh-col.h-corner {
+  position: absolute;
+  left: var(--kb-col-left, 43px);
+  right: auto;
+  top: 50%;
+  bottom: auto;
+  transform: translateY(-50%);
+  /* 集合信息字号 = 副标题字号（同一个变量、同一套换算）：改「副标题字号」，集合跟着一起变 */
+  font-size: calc(var(--kb-head-sub-size, 13px) * var(--kb-ui-scale, 1));
+  line-height: 1.2;
+  max-width: 34%;
+}
+#scoreHead.h-head .sh-col.h-corner.to-right {
+  left: auto;
+  right: var(--kb-col-right, 30px);
+}

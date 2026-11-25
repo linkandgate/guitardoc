@@ -121,6 +121,7 @@
         items.forEach(function (it) {
           var d = document.createElement('div');
           d.className = 'key ' + (it.black ? 'black' : 'white');
+          d.dataset.midi = String(it.m);   // 供外部校验/工具识别键位（不影响渲染）
           if (it.black) {
             var bw = W * KW, cx = (it.wi + 1) * W;
             d.style.left = (cx - bw / 2) + '%';
@@ -1241,7 +1242,7 @@
       function jianpuKeyName(fifths) {
         if (typeof fifths !== 'number' || !isFinite(fifths)) return '';
         var i = Math.max(-7, Math.min(7, Math.round(fifths))) + 7;
-        return '1=' + KEY_NAMES[i];
+        return '1=' + KEY_NAMES[i].replace(/#/g, '♯').replace(/b/g, '♭');
       }
 
       // MIDI 的 keySignatures 给的是 'C' / 'Am' 这种，换成简谱的 1=X
@@ -1261,13 +1262,18 @@
           .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
       }
 
+      // 去掉文件后缀（作品标题不应出现 .musicxml / .mid 等扩展名）
+      function stripFileExt(s) {
+        return String(s == null ? '' : s).replace(/\.(musicxml|mxl|xml|mid|midi|svg|mp3|wav|flac|ogg|jpg|jpeg|png|webp|gif|txt|json|js)$/i, '');
+      }
+
       // 自动值：曲名、以及「调号 | 速度 | 拍号」那一行
       function autoHeadTitle() {
         var t = (scoreMeta && scoreMeta.title) || '';
         if (!t) t = titleFromJp() || '';
         if (!t) t = (score && score.title) || '';
-        if (!t) t = String(curLabel || '').replace(/\.[a-z0-9]+$/i, '');
-        return t;
+        if (!t) t = String(curLabel || '');
+        return stripFileExt(t).trim();
       }
 
       function autoHeadMeta() {
@@ -2445,11 +2451,14 @@
 
         score = {
           notes: res.notes,
-          title: (scoreMeta && scoreMeta.title) || name || '',
+          title: (scoreMeta && scoreMeta.title) || stripFileExt(name) || '',
           measures: res.measures,
           parts: res.parts,
           info: res.info || null
         };
+
+        // jp2：保留原始 MusicXML 文本，供新简谱渲染器做富解析（音高/时值/装饰音/连音/多连音）。
+        try { jp2Prepare(text); } catch (eJp) { }
 
         try {
           console.log('[MusicXML] 音符 ' + res.notes.length +
@@ -2466,6 +2475,10 @@
         try { renderScoreHead(); } catch (eH) { }
         updateStatus();
         try { refreshMeasureOptions(); } catch (e6) { }
+        // SVG 已就位时，XML 一到就重建流程，让 jp2 简谱立刻取代 efData。
+        if (pendingPages.length) {
+          try { waitFonts(function () { try { buildFlow(); } catch (eB) { } }); } catch (eW) { }
+        }
       }
 
       function readXMLFile(f) {
@@ -3506,6 +3519,7 @@
       function wrapEl() { return document.getElementById('svgWrap'); }
       function hostEl() { return document.getElementById('svgHost'); }
       function cursorEl() { return document.getElementById('svgCursor'); }
+      function cursorJpEl() { return document.getElementById('jpCursor'); }
 
       function matrixXY(el) {
         var tr = el.getAttribute('transform');
@@ -3600,11 +3614,11 @@
       // 简谱真正离不开的只有下面这几个「符号/数字」字体（加起来 ~400KB）：
       //   SparksNMN-EOPNumber 3KB 数字、SparksNMN-Bravura 328KB 小节线/符号、
       //   SparksNMN-mscore-20 20KB 升降号、Roman 51KB 调号等文字
-      // 中文字体（CommonLight / CommonSerif / CommonBlack）是 4~8MB 的大文件，
-      // 只影响简谱里那句中文标题；它们不参与「首屏是否可渲染」的判断，后台加载、自动替换。
+      // 中文大字体（CommonLight / CommonSerif / CommonBlack）已移除：jp2 简谱的中文
+      // 标题/文字一律走系统字体（body 的 Microsoft YaHei 等），不再加载 4~8MB 的 CJK 字体。
       var CORE_FAMS = ['Roman', 'RomanItalic', 'SparksNMN-EOPNumber',
         'SparksNMN-mscore-20', 'SparksNMN-Bravura'];
-      var TEXT_FAMS = ['CommonLight', 'CommonSerif', 'CommonBlack'];
+      var TEXT_FAMS = [];
       var FAMS = TEXT_FAMS.concat(CORE_FAMS);
       var fontsReady = false, fontsInjected = false;
 
@@ -4013,6 +4027,1098 @@
         board.style.minHeight = '';
       }
 
+      // ================= jp2：MusicXML + SVG 驱动的简谱渲染器 =================
+      // 不再依赖 efData.js。直接解析 MusicXML 的音高/时值/装饰音/连音/多连音，
+      // 用 SVG 符头的横向坐标给每个简谱数字定位，做到「数字位置对应五线谱音符位置」。
+      // 所有线条/八度点/弧线都用 div{background+clip-path+box-shadow} 画，
+      // 数字/标签用文本 span —— 与 shootJianpu 的位图光栅化契约完全兼容。
+      var jp2Rich = null;        // 富解析结果 {notes,rests,measures,fifths,beats,beatType}
+      var jp2SourceText = '';    // 原始 MusicXML 文本（导出 song.data.js 给播放器重建简谱用）
+      var jp2Reg = {};           // si -> {bi, col}，跨行弧线用
+      var JP2_NUM_FONT = "'SparksNMN-EOPNumber','Roman',serif";
+      var JP2_SYM_FONT = "'Roman','Times New Roman',serif";
+
+      function jp2KeyAlter(fifths) {
+        var map = { C: 0, D: 0, E: 0, F: 0, G: 0, A: 0, B: 0 };
+        var sharpOrder = ['F', 'C', 'G', 'D', 'A', 'E', 'B'];
+        var flatOrder = ['B', 'E', 'A', 'D', 'G', 'C', 'F'];
+        var i;
+        if (fifths > 0) { for (i = 0; i < fifths && i < 7; i++) map[sharpOrder[i]] = 1; }
+        else if (fifths < 0) { for (i = 0; i < -fifths && i < 7; i++) map[flatOrder[i]] = -1; }
+        return map;
+      }
+
+      // 富解析：保留 voice/staff/type/dots/accidental/slur/tuplet/beam/tie/rest/chord/grace。
+      // 时间轴逻辑与 parseMusicXML 完全一致（measure 用 0-based 下标 mi，便于和 score.notes 对键）。
+      function parseJpXml(text) {
+        var doc;
+        try { doc = new DOMParser().parseFromString(text, 'text/xml'); } catch (e) { return null; }
+        if (!doc || doc.getElementsByTagName('parsererror').length) return null;
+        var root = doc.documentElement;
+        if (!root) return null;
+        var parts = root.getElementsByTagName('part');
+        if (!parts.length) return null;
+        var notes = [], rests = [], measures = [];
+        var gFifths = 0, gBeats = 4, gBeatType = 4, order = 0;
+        var STEP_ORDER = { C: 0, D: 1, E: 2, F: 3, G: 4, A: 5, B: 6 };
+        for (var pi = 0; pi < parts.length; pi++) {
+          var ms = parts[pi].getElementsByTagName('measure');
+          var divisions = 1, t = 0;
+          var fifths = gFifths, beats = gBeats, beatType = gBeatType;
+          for (var mi = 0; mi < ms.length; mi++) {
+            var m = ms[mi];
+            var mnum = parseInt(m.getAttribute('number'), 10) || (mi + 1);
+            var lastOnset = t;
+            var attrs = m.getElementsByTagName('attributes')[0];
+            if (attrs) {
+              var dv = attrs.getElementsByTagName('divisions')[0];
+              if (dv && parseFloat(dv.textContent)) divisions = parseFloat(dv.textContent);
+              var kf = attrs.getElementsByTagName('fifths')[0];
+              if (kf) fifths = parseInt(kf.textContent, 10) || 0;
+              var tb = attrs.getElementsByTagName('beats')[0];
+              if (tb) beats = parseInt(tb.textContent, 10) || beats;
+              var tt = attrs.getElementsByTagName('beat-type')[0];
+              if (tt) beatType = parseInt(tt.textContent, 10) || beatType;
+            }
+            if (pi === 0) {
+              measures[mnum] = { fifths: fifths, beats: beats, beatType: beatType };
+              if (mi === 0) { gFifths = fifths; gBeats = beats; gBeatType = beatType; }
+            }
+            var kids = m.childNodes;
+            for (var ci = 0; ci < kids.length; ci++) {
+              var node = kids[ci];
+              if (node.nodeType !== 1) continue;
+              var tag = node.tagName;
+              if (tag === 'backup') { var bd = node.getElementsByTagName('duration')[0]; if (bd) t -= (parseFloat(bd.textContent) || 0) / divisions; continue; }
+              if (tag === 'forward') { var fd = node.getElementsByTagName('duration')[0]; if (fd) t += (parseFloat(fd.textContent) || 0) / divisions; continue; }
+              if (tag !== 'note') continue;
+              var isChord = !!node.getElementsByTagName('chord')[0];
+              var graceEl = node.getElementsByTagName('grace')[0];
+              var isGrace = !!graceEl;
+              var graceSlash = isGrace && graceEl.getAttribute('slash') === 'yes';
+              var isRest = !!node.getElementsByTagName('rest')[0];
+              var durEl = node.getElementsByTagName('duration')[0];
+              var dur = durEl ? (parseFloat(durEl.textContent) || 0) / divisions : 0;
+              var onset = isChord ? lastOnset : t;
+              if (!isChord) lastOnset = t;
+              var step = 'C', octave = 4, alter = 0;
+              var pt = node.getElementsByTagName('pitch')[0];
+              if (pt) {
+                var st = pt.getElementsByTagName('step')[0]; if (st) step = st.textContent.trim();
+                var oc = pt.getElementsByTagName('octave')[0]; if (oc) octave = parseInt(oc.textContent, 10) || 4;
+                var al = pt.getElementsByTagName('alter')[0]; if (al) alter = parseFloat(al.textContent) || 0;
+              }
+              var midi = (octave + 1) * 12 + (STEP_SEMI[step] || 0) + alter;
+              var voiceEl = node.getElementsByTagName('voice')[0];
+              var voice = voiceEl ? voiceEl.textContent.trim() : '1';
+              var staffEl = node.getElementsByTagName('staff')[0];
+              var staff = staffEl ? parseInt(staffEl.textContent, 10) : 0;
+              var typeEl = node.getElementsByTagName('type')[0];
+              var type = typeEl ? typeEl.textContent.trim() : '';
+              var dots = node.getElementsByTagName('dot').length;
+              var accEl = node.getElementsByTagName('accidental')[0];
+              var accidental = accEl ? accEl.textContent.trim() : '';
+              var tieStart = false, tieStop = false;
+              var tieEls = node.getElementsByTagName('tie');
+              if (!tieEls.length) tieEls = node.getElementsByTagName('tied');
+              for (var ti = 0; ti < tieEls.length; ti++) {
+                var ty = tieEls[ti].getAttribute('type');
+                if (ty === 'start') tieStart = true;
+                if (ty === 'stop') tieStop = true;
+              }
+              var slurs = [], tuplets = [], beams = [];
+              // 连音数（actual/normal）在 <time-modification>（note 的直接子元素），不在 <tuplet> 元素内。
+              var tmEl = node.getElementsByTagName('time-modification')[0];
+              var tmActual = 0, tmNormal = 0;
+              if (tmEl) {
+                var an0 = tmEl.getElementsByTagName('actual-notes')[0];
+                var nn0 = tmEl.getElementsByTagName('normal-notes')[0];
+                tmActual = an0 ? (parseInt(an0.textContent, 10) || 0) : 0;
+                tmNormal = nn0 ? (parseInt(nn0.textContent, 10) || 0) : 0;
+              }
+              var nots = node.getElementsByTagName('notations')[0];
+              if (nots) {
+                var sl = nots.getElementsByTagName('slur');
+                for (var sli = 0; sli < sl.length; sli++) slurs.push({ number: sl[sli].getAttribute('number') || '1', type: sl[sli].getAttribute('type') || '' });
+                var tu = nots.getElementsByTagName('tuplet');
+                for (var tui = 0; tui < tu.length; tui++) {
+                  var an = tu[tui].getElementsByTagName('actual-notes')[0];
+                  var nn = tu[tui].getElementsByTagName('normal-notes')[0];
+                  tuplets.push({ number: tu[tui].getAttribute('number') || '1', type: tu[tui].getAttribute('type') || '', actual: an ? (parseInt(an.textContent, 10) || tmActual) : tmActual, normal: nn ? (parseInt(nn.textContent, 10) || tmNormal) : tmNormal });
+                }
+              }
+              var bm = node.getElementsByTagName('beam');
+              for (var bmi = 0; bmi < bm.length; bmi++) beams.push({ number: parseInt(bm[bmi].getAttribute('number'), 10) || 1, value: bm[bmi].textContent.trim() });
+              var rec = {
+                part: pi, measure: mi, mnum: mnum, ts: onset, dur: dur, halfTone: midi,
+                step: step, octave: octave, alter: alter, stepOrder: STEP_ORDER[step] || 0,
+                voice: voice, staff: staff, type: type, dots: dots, accidental: accidental,
+                grace: isGrace, graceSlash: graceSlash, chord: isChord, rest: isRest,
+                tieStart: tieStart, tieStop: tieStop, slurs: slurs, tuplets: tuplets, beams: beams,
+                docOrder: order++, si: -1, svgK: -1, col: null,
+                // 渲染期填充
+                degree: 1, oct: 0, accSign: '', under: 0, dashes: 0, augDots: 0,
+                digitX: 0, topExt: 0, botExt: 0
+              };
+              if (isRest) rests.push(rec); else notes.push(rec);
+              if (!isChord) t += dur;
+            }
+          }
+        }
+        if (!notes.length) return null;
+        return { notes: notes, rests: rests, measures: measures, fifths: gFifths, beats: gBeats, beatType: gBeatType };
+      }
+
+      function jp2Prepare(xmlText) {
+        jp2Rich = null; jp2Reg = {}; jp2SourceText = xmlText || '';
+        if (!xmlText) return;
+        try { jp2Rich = parseJpXml(xmlText); } catch (e) { jp2Rich = null; }
+      }
+
+      // 把富解析音符和 score.notes（播放/高亮用的权威序列）按多重键消费式配对，拿到 si。
+      function jp2LinkSi() {
+        if (!jp2Rich || !score || !score.notes) return;
+        var map = {}, i;
+        for (i = 0; i < score.notes.length; i++) {
+          var n = score.notes[i];
+          var key = n.part + '|' + n.measure + '|' + n.ts.toFixed(4) + '|' + n.halfTone + '|' + (n.grace ? 1 : 0);
+          (map[key] = map[key] || []).push(i);
+        }
+        var used = {};
+        for (i = 0; i < jp2Rich.notes.length; i++) {
+          var r = jp2Rich.notes[i];
+          var k = r.part + '|' + r.measure + '|' + r.ts.toFixed(4) + '|' + r.halfTone + '|' + (r.grace ? 1 : 0);
+          var arr = map[k];
+          if (arr) { for (var j = 0; j < arr.length; j++) { if (!used[arr[j]]) { r.si = arr[j]; used[arr[j]] = 1; break; } } }
+        }
+      }
+
+      // 终止线（细+粗双线）会被当成两条小节线，间距很近的合并成一条。
+      function jp2MergeBars(barXs, thr) {
+        thr = thr || 30;
+        var out = [];
+        for (var i = 0; i < barXs.length; i++) {
+          if (out.length && barXs[i] - out[out.length - 1] < thr) continue;
+          out.push(barXs[i]);
+        }
+        return out;
+      }
+
+      // ---- DOM 小工具（全部内联样式，导出安全）----
+      function jp2Div(parent, x, y, w, h, bg) {
+        var d = document.createElement('div');
+        d.style.cssText = 'position:absolute;left:' + x.toFixed(2) + 'px;top:' + y.toFixed(2) + 'px;width:' + Math.max(0.3, w).toFixed(2) + 'px;height:' + Math.max(0.3, h).toFixed(2) + 'px;background:' + (bg || '#000') + ';';
+        parent.appendChild(d);
+        return d;
+      }
+      // 色带：clip-path 多边形 + box-shadow 取色，shootJianpu 能光栅化。
+      function jp2Band(parent, x, y, w, h, poly, color) {
+        var d = jp2Div(parent, x, y, w, h, color || '#000');
+        d.style.clipPath = 'polygon(' + poly + ')';
+        d.style.boxShadow = '0 0 0 0 ' + (color || '#000');
+        return d;
+      }
+      // 直线（小节线/增时线/减时线）：矩形色带，shootJianpu 能光栅化。
+      function jp2Rule(parent, x, y, w, h, color) {
+        return jp2Band(parent, x, y, w, h, '0 0,100% 0,100% 100%,0 100%', color || '#000');
+      }
+      function jp2Text(parent, x, y, w, h, text, fontPx, fam, color, align, weight) {
+        var s = document.createElement('span');
+        s.style.cssText = 'position:absolute;left:' + x.toFixed(2) + 'px;top:' + y.toFixed(2) + 'px;width:' + w.toFixed(2) + 'px;height:' + h.toFixed(2) + 'px;line-height:' + h.toFixed(2) + 'px;font-size:' + fontPx.toFixed(2) + 'px;font-family:' + (fam || JP2_NUM_FONT) + ';color:' + (color || '#000') + ';text-align:' + (align || 'center') + ';font-weight:' + (weight || '400') + ';white-space:nowrap;overflow:visible;';
+        s.textContent = text;
+        parent.appendChild(s);
+        return s;
+      }
+      // 拍号分数式：分子（上）+ 横线（中）+ 分母（下），整体以 cy 为中心竖直居中（需求 m01986：分子分母间横线、间距合适）
+      function jp2TimeSig(parent, left, cy, w, fs, beats, beatType) {
+        var gap = 0.30 * fs;                       // 分子/分母与横线的间距（需求 m02038：加大间距）
+        var barTh = Math.max(1, 0.07 * fs);        // 横线粗细
+        jp2Text(parent, left, cy - gap - fs, w, fs, String(beats), fs, JP2_NUM_FONT, '#000', 'center');
+        jp2Rule(parent, left, cy - barTh / 2, w, barTh, '#000');
+        jp2Text(parent, left, cy + gap, w, fs, String(beatType), fs, JP2_NUM_FONT, '#000', 'center');
+      }
+      // 二次贝塞尔弧线 → 采样成带宽度的 clip-path 多边形。
+      function jp2Arc(parent, x0, y0, x1, y1, apexY, th, color) {
+        var cx = (x0 + x1) / 2, cy = 2 * apexY - (y0 + y1) / 2;
+        var N = 16, up = [], dn = [], i, t, mt, bx, by;
+        var minX = Math.min(x0, x1), maxX = Math.max(x0, x1);
+        var minY = Math.min(y0, y1, apexY), maxY = Math.max(y0, y1, apexY);
+        for (i = 0; i <= N; i++) {
+          t = i / N; mt = 1 - t;
+          bx = mt * mt * x0 + 2 * mt * t * cx + t * t * x1;
+          by = mt * mt * y0 + 2 * mt * t * cy + t * t * y1;
+          up.push([bx, by - th / 2]); dn.push([bx, by + th / 2]);
+          if (bx < minX) minX = bx; if (bx > maxX) maxX = bx;
+          if (by - th / 2 < minY) minY = by - th / 2; if (by + th / 2 > maxY) maxY = by + th / 2;
+        }
+        var w = Math.max(0.6, maxX - minX), h = Math.max(0.6, maxY - minY);
+        var pts = up.concat(dn.reverse()), poly = [];
+        for (i = 0; i < pts.length; i++) {
+          poly.push(((pts[i][0] - minX) / w * 100).toFixed(2) + '% ' + ((pts[i][1] - minY) / h * 100).toFixed(2) + '%');
+        }
+        return jp2Band(parent, minX, minY, w, h, poly.join(','), color);
+      }
+
+      // 时值 → 减时线数 / 增时线数
+      function jp2Duration(rec) {
+        var t = rec.type;
+        var under = 0, dashes = 0;
+        if (t === 'whole') dashes = 3;
+        else if (t === 'half') dashes = 1;
+        else if (t === 'eighth') under = 1;
+        else if (t === '16th') under = 2;
+        else if (t === '32nd') under = 3;
+        else if (t === '64th') under = 4;
+        else if (t === 'breve') dashes = 7;
+        else {
+          // 没有 type 时按 dur 兜底
+          var d = rec.dur;
+          if (d >= 3.5) dashes = 3; else if (d >= 1.5) dashes = 1;
+          else if (d >= 0.75) under = 0; else if (d >= 0.375) under = 1;
+          else if (d >= 0.1875) under = 2; else under = 3;
+        }
+        rec.under = under; rec.dashes = dashes; rec.augDots = rec.dots || 0;
+      }
+
+      // 音高 → 简谱数字 / 八度点 / 临时记号
+      function jp2Pitch(rec, fifths) {
+        var tonicName = KEY_NAMES[(fifths + 7) % 15] || 'C';
+        var tonicStep = tonicName.charAt(0);
+        var tonicAlter = tonicName.length > 1 ? (tonicName.charAt(1) === '#' ? 1 : -1) : 0;
+        var STEP_ORDER = { C: 0, D: 1, E: 2, F: 3, G: 4, A: 5, B: 6 };
+        var tonicIdx = 4 * 7 + STEP_ORDER[tonicStep];
+        var noteIdx = rec.octave * 7 + rec.stepOrder;
+        var diff = noteIdx - tonicIdx;
+        var oct = Math.floor(diff / 7);
+        var degree = ((diff % 7) + 7) % 7 + 1;
+        rec.degree = degree; rec.oct = oct;
+        var keyAlter = jp2KeyAlter(fifths);
+        var acc = rec.accidental;
+        var sign = '';
+        if (acc === 'natural') sign = '♮';
+        else if (acc === 'sharp') sign = '♯';
+        else if (acc === 'flat') sign = '♭';
+        else if (acc === 'double-sharp') sign = '×';
+        else if (acc === 'flat-flat') sign = '♭♭';
+        else if (acc === 'natural-sharp') sign = '♮♯';
+        else if (acc === 'natural-flat') sign = '♮♭';
+        else {
+          var d = rec.alter - (keyAlter[rec.step] || 0);
+          if (d > 0) sign = d === 2 ? '×' : new Array(d + 1).join('♯');
+          else if (d < 0) sign = new Array(-d + 1).join('♭');
+        }
+        rec.accSign = sign;
+      }
+
+      // 主入口：给每个五线谱块建一行简谱。在 buildFlow 的 noteFrom/noteTo 之后调用。
+      function buildJp2Rows(groupW) {
+        if (!jp2Rich || !score || !blocks || !blocks.length) return false;
+        jp2LinkSi();
+        jp2Reg = {};
+        var HORIZ = !!window.KB_HORIZ;
+        var padX = HORIZ ? 8 : 10;
+        var F = Math.max(9, Math.min(30, groupW * 0.026));
+        var sx = groupW / (blocks[0].vbW || groupW);
+        var okCount = 0;
+        // 第一遍：给每块分配小节、把 XML 音符/休止 zip 到 SVG 符头，建列。
+        var M = 0, i;
+        for (i = 0; i < jp2Rich.notes.length; i++) if (jp2Rich.notes[i].mnum > M) M = jp2Rich.notes[i].mnum;
+        for (i = 0; i < jp2Rich.rests.length; i++) if (jp2Rich.rests[i].mnum > M) M = jp2Rich.rests[i].mnum;
+        // 每块合并后的小节线数 → 小节数。
+        // 双小节线（转调/变拍/反复/终止）的两条线间距可达 ~135，固定阈值 30 合并不掉 →
+        // 小节数虚高、与 XML 小节数 M 不等 → 退化成按音数 DP 分配，会漏掉每行末尾小节（如第 4 小节）。
+        // 这里从小到大试合并阈值，用「合并后总小节数 == M」校验，取首个吻合者（真实小节间距通常 >300，不会被误并）。
+        var thrCandidates = [30, 80, 150, 220, 320];
+        var blkBars = [], totalMeasures = 0, prevBB = null, prevTM = 0;
+        for (var ti = 0; ti < thrCandidates.length; ti++) {
+          var thr = thrCandidates[ti];
+          var bb = [], tm = 0;
+          for (i = 0; i < blocks.length; i++) {
+            var mb = jp2MergeBars(blocks[i].barXs || [], thr);
+            bb.push(mb);
+            tm += Math.max(1, mb.length - 1);
+          }
+          if (tm === M) { blkBars = bb; totalMeasures = tm; break; }
+          if (tm < M) { blkBars = prevBB || bb; totalMeasures = prevTM || tm; break; } // 阈值过大并掉了真实小节，回退上一档
+          prevBB = bb; prevTM = tm; blkBars = bb; totalMeasures = tm;
+        }
+        var sequential = (totalMeasures === M);
+        var mStart = 1;
+        for (i = 0; i < blocks.length; i++) {
+          var blk = blocks[i];
+          var bars = blkBars[i];
+          var nMeas = Math.max(1, bars.length - 1);
+          var m0, m1;
+          if (sequential) { m0 = mStart; m1 = mStart + nMeas - 1; mStart = m1 + 1; }
+          else { m0 = (blk.mFrom || 0) + 1; m1 = blk.mTo || m0; }
+          blk.jp2m0 = m0; blk.jp2m1 = m1;
+          jp2MapBlock(blk, i, bars, m0, m1, sx, groupW);
+        }
+        // 第二遍：渲染每行（需要 jp2Reg 已建好，跨行弧线才能找到伙伴）。
+        for (i = 0; i < blocks.length; i++) {
+          var b2 = blocks[i];
+          if (!b2.jp2cols || !b2.jp2cols.length) { continue; }
+          jp2RenderRow(b2, i, groupW, F, sx, padX, HORIZ);
+          okCount++;
+        }
+        // 用精确映射覆盖 svgScoreMap / svgToScore。
+        var map = [], inv = [], si;
+        for (si = 0; si < score.notes.length; si++) map[si] = -1;
+        for (i = 0; i < jp2Rich.notes.length; i++) {
+          var r = jp2Rich.notes[i];
+          if (r.si >= 0 && r.svgK >= 0) { map[r.si] = r.svgK; if (inv[r.svgK] === undefined) inv[r.svgK] = r.si; }
+        }
+        var filled = 0;
+        for (si = 0; si < map.length; si++) if (map[si] >= 0) filled++;
+        if (filled > score.notes.length * 0.5) { svgScoreMap = map; svgToScore = inv; }
+        return okCount > 0;
+      }
+
+      // 把一块的 XML 音符/休止按小节 zip 到 SVG 符头，并建简谱列。
+      function jp2MapBlock(blk, bi, bars, m0, m1, sx, groupW) {
+        var vbTop = blk.vbTop, sysH = blk.sysH;
+        var cropLeft = blk.vbLeft;
+        // SVG 符头（含 grace），中心 = x + 16.25*a
+        var svgNotes = [];
+        var noteEls = blk.svg.querySelectorAll('.Note');
+        for (var i = 0; i < noteEls.length; i++) {
+          var el = noteEls[i];
+          var tr = el.getAttribute('transform') || '';
+          var mm = /matrix\(([^)]+)\)/.exec(tr);
+          var a = 1, X = 0, Y = 0;
+          if (mm) { var p = mm[1].split(',').map(parseFloat); a = p[0]; X = p[4]; Y = p[5]; }
+          else { var xy = matrixXY(el); X = xy.x; Y = xy.y; }
+          if (Y < vbTop - 1 || Y > vbTop + sysH + 1) continue;
+          svgNotes.push({ el: el, x: X, y: Y, a: a, cx: X + 16.25 * a, grace: a < 0.8 });
+        }
+        svgNotes.sort(function (p, q) { return Math.abs(p.x - q.x) > 3 ? p.x - q.x : q.y - p.y; });
+        // SVG 休止
+        var svgRests = [];
+        var restEls = blk.svg.querySelectorAll('.Rest');
+        for (i = 0; i < restEls.length; i++) {
+          var rel = restEls[i];
+          var rxy = matrixXY(rel);
+          if (rxy.y < vbTop - 1 || rxy.y > vbTop + sysH + 1) continue;
+          svgRests.push({ el: rel, x: rxy.x, y: rxy.y, cx: rxy.x + 10 });
+        }
+        svgRests.sort(function (p, q) { return p.x - q.x; });
+        // 按小节分箱
+        function binOf(cx) {
+          var jj = 0;
+          for (var q = 1; q < bars.length; q++) { if (cx >= bars[q] - 1) jj = q; }
+          return Math.min(jj, Math.max(0, bars.length - 2));
+        }
+        var noteBins = [], restBins = [], b;
+        for (b = 0; b < Math.max(1, bars.length - 1); b++) { noteBins.push([]); restBins.push([]); }
+        for (i = 0; i < svgNotes.length; i++) { var nb = binOf(svgNotes[i].cx); if (noteBins[nb]) noteBins[nb].push(svgNotes[i]); }
+        for (i = 0; i < svgRests.length; i++) { var rb = binOf(svgRests[i].cx); if (restBins[rb]) restBins[rb].push(svgRests[i]); }
+        // 本块的 XML 音符/休止（按 mnum 过滤）
+        var xmlNotes = [], xmlRests = [];
+        for (i = 0; i < jp2Rich.notes.length; i++) { var rn = jp2Rich.notes[i]; if (rn.mnum >= m0 && rn.mnum <= m1) xmlNotes.push(rn); }
+        for (i = 0; i < jp2Rich.rests.length; i++) { var rr = jp2Rich.rests[i]; if (rr.mnum >= m0 && rr.mnum <= m1) xmlRests.push(rr); }
+        // 小节内排序：ts, grace 优先, 音高升序, part 降序, docOrder
+        function noteCmp(p, q) {
+          if (p.ts !== q.ts) return p.ts - q.ts;
+          if (p.grace !== q.grace) return p.grace ? -1 : 1;
+          if (p.halfTone !== q.halfTone) return p.halfTone - q.halfTone;
+          if (p.part !== q.part) return q.part - p.part;
+          return p.docOrder - q.docOrder;
+        }
+        var cols = [];
+        var measCount = Math.max(1, bars.length - 1);
+        for (b = 0; b < measCount; b++) {
+          var mnum = m0 + b;
+          var xn = xmlNotes.filter(function (r) { return r.mnum === mnum; }).sort(noteCmp);
+          var sn = noteBins[b] || [];
+          // 装饰音与正常音分别配对：SVG 里装饰符头刻在节拍左侧（x 最小），
+          // 而 XML 排序后装饰音未必排在最前（如低音和弦先于高音装饰音），
+          // 直接按序号 zip 会把装饰音错配到正常符头、低音错配到装饰符头，
+          // 导致简谱装饰音列与主音列重叠。按 grace 标志拆成两组各自 zip 即可对齐。
+          var xnG = [], xnR = [], snG = [], snR = [];
+          for (i = 0; i < xn.length; i++) (xn[i].grace ? xnG : xnR).push(xn[i]);
+          for (i = 0; i < sn.length; i++) (sn[i].grace ? snG : snR).push(sn[i]);
+          function zipPair(xa, sa) {
+            var c = Math.min(xa.length, sa.length), j;
+            for (j = 0; j < c; j++) {
+              xa[j].svgK = svgFlatIndexOf(blk, sa[j].el);
+              xa[j].svgCx = sa[j].cx;
+              xa[j].svgGrace = sa[j].grace;
+            }
+            // 若 XML 比 SVG 多（罕见），多出的用比例兜底定位
+            for (j = c; j < xa.length; j++) {
+              var frac = xa.length > 1 ? j / (xa.length - 1) : 0.5;
+              var bx0 = bars[b] || cropLeft, bx1 = bars[b + 1] || (cropLeft + blk.vbW);
+              xa[j].svgCx = bx0 + (bx1 - bx0) * (0.15 + 0.7 * frac);
+              xa[j].svgK = -1;
+            }
+          }
+          zipPair(xnG, snG);
+          zipPair(xnR, snR);
+          var xr = xmlRests.filter(function (r) { return r.mnum === mnum; }).sort(function (p, q) { return p.ts - q.ts || p.docOrder - q.docOrder; });
+          var sr = restBins[b] || [];
+          for (i = 0; i < xr.length; i++) {
+            if (i < sr.length) { xr[i].svgCx = sr[i].cx; xr[i].svgK = -1; }
+            else { var bx0r = bars[b] || cropLeft, bx1r = bars[b + 1] || (cropLeft + blk.vbW); xr[i].svgCx = (bx0r + bx1r) / 2; }
+          }
+        }
+        // 每声部各建一组列（简谱一行一个声部）：非 grace 按 ts 合并和弦列；grace/休止独立列。
+        function buildColsFor(recs) {
+          var byTs = {}, out = [];
+          for (var ii = 0; ii < recs.length; ii++) {
+            var rec = recs[ii];
+            var px = (rec.svgCx - cropLeft) * sx;
+            rec.px = px;
+            if (rec.rest) out.push({ members: [rec], x: px, grace: false, rest: true, ts: rec.ts });
+            else if (rec.grace) {
+              // 同一拍的装饰音归为一列（纵向叠置），避免多个装饰音 x 相近时横向重叠（需求 m02686 第2点）
+              var gkey = 'g' + rec.ts.toFixed(4);
+              if (!byTs[gkey]) { byTs[gkey] = { members: [], x: 0, grace: true, rest: false, ts: rec.ts }; out.push(byTs[gkey]); }
+              byTs[gkey].members.push(rec);
+            }
+            else {
+              var key = rec.ts.toFixed(4);
+              if (!byTs[key]) { byTs[key] = { members: [], x: 0, grace: false, rest: false, ts: rec.ts }; out.push(byTs[key]); }
+              byTs[key].members.push(rec);
+            }
+          }
+          for (var ii2 = 0; ii2 < out.length; ii2++) {
+            var c = out[ii2];
+            if (c.members.length > 1 && !c.rest) c.members.sort(function (p, q) { return p.halfTone - q.halfTone || p.part - q.part; });
+            var sum = 0; for (var jj = 0; jj < c.members.length; jj++) sum += c.members[jj].px;
+            c.x = sum / c.members.length;
+          }
+          out.sort(function (p, q) { return p.x - q.x; });
+          return out;
+        }
+        var all = xmlNotes.concat(xmlRests);
+        // 全局声部列表（与 SVG 谱表自上而下一致：P1 高音在上，P2 低音在下）
+        var partSet = {};
+        for (i = 0; i < jp2Rich.notes.length; i++) partSet[jp2Rich.notes[i].part] = 1;
+        for (i = 0; i < jp2Rich.rests.length; i++) partSet[jp2Rich.rests[i].part] = 1;
+        var parts = Object.keys(partSet).map(Number).sort(function (a, b) { return a - b; });
+        if (!parts.length) parts = [0];
+        var partCols = {};
+        for (var pi = 0; pi < parts.length; pi++) {
+          var pp = parts[pi];
+          partCols[pp] = buildColsFor(all.filter(function (r) { return r.part === pp; }));
+        }
+        blk.jp2parts = parts;
+        blk.jp2partCols = partCols;
+        blk.jp2bars = bars;
+        blk.jp2sx = sx;
+        blk.jp2cropLeft = cropLeft;
+        // 扁平 cols（兼容 arcs / 统计）
+        var cols = [];
+        for (pi = 0; pi < parts.length; pi++) cols = cols.concat(partCols[parts[pi]]);
+        blk.jp2cols = cols;
+        // 注册 si → 列（跨行弧线用）
+        for (i = 0; i < cols.length; i++) {
+          var cc = cols[i];
+          cc.bi = bi;
+          for (var mj = 0; mj < cc.members.length; mj++) {
+            var mr = cc.members[mj];
+            mr.col = cc;
+            if (mr.si >= 0) jp2Reg[mr.si] = { bi: bi, col: cc };
+          }
+        }
+        // 更新 scoreFrom/scoreTo/mFrom/mTo 与既有约定一致
+        var sFrom = -1, sTo = -1;
+        for (i = 0; i < score.notes.length; i++) {
+          var mn = score.notes[i].measure + 1; // score.notes.measure 是 0-based
+          if (mn >= m0 && mn <= m1) { if (sFrom < 0) sFrom = i; sTo = i + 1; }
+        }
+        if (sFrom >= 0) { blk.scoreFrom = sFrom; blk.scoreTo = sTo; blk.mFrom = m0 - 1; blk.mTo = m1; }
+      }
+
+      function svgFlatIndexOf(blk, el) {
+        for (var i = 0; i < svgFlat.length; i++) {
+          if (svgFlat[i].blk === blocks.indexOf(blk) && svgFlat[i].el === el) return i;
+        }
+        // 兜底：按元素引用全局找
+        for (i = 0; i < svgFlat.length; i++) if (svgFlat[i].el === el) return i;
+        return -1;
+      }
+
+      // 渲染一行简谱。
+      function jp2RenderRow(blk, bi, groupW, F, sx, padX, HORIZ) {
+        var bars = blk.jp2bars;
+        var cropLeft = blk.jp2cropLeft;
+        var parts = blk.jp2parts || [0];
+        var partCols = blk.jp2partCols || { 0: blk.jp2cols || [] };
+        var graceScale = 0.62;
+        // 容器：shootJianpu 取 .flowJp 第一个 div 作为 inner，须包含所有声部子行。
+        // margin:0 auto 与 .flowSys svg 的居中方式一致 → 简谱 x 原点严格对齐五线谱 SVG。
+        var container = document.createElement('div');
+        container.setAttribute('data-jp2', '1');
+        container.style.cssText = 'position:relative;width:' + groupW.toFixed(2) + 'px;margin:0 auto;overflow:visible;';
+        var bySi = {}, anchors = [], allCols = [], rows = [];
+        var yOffset = 0;
+
+        // 渲染单个声部子行，返回 {root, bySi, anchors, h, cols}
+        function renderPart(cols, part, showKey, yOff) {
+          var i, j, c, r;
+          var pF = F;
+          // 音高/时值
+          for (i = 0; i < cols.length; i++) {
+            c = cols[i];
+            for (j = 0; j < c.members.length; j++) {
+              r = c.members[j];
+              var fifths = (jp2Rich.measures[r.mnum] && jp2Rich.measures[r.mnum].fifths) || jp2Rich.fifths;
+              if (!r.rest) jp2Pitch(r, fifths);
+              jp2Duration(r);
+            }
+          }
+          // 精确 x 对齐：每列中心严格 = 对应 SVG 音符 x，不做碰撞松弛（用户要求音符 x 对齐五线谱）。
+          // 自适应字号只缩小数字宽度，列中心 c.x 不变 → 对齐始终保持。
+          var dotStep, dotR, underGap, lineTh, digitW, chordGap, minGap;
+          function layoutFor(fF) {
+            dotStep = 0.30 * fF; dotR = 0.10 * fF;
+            underGap = 0.24 * fF; lineTh = Math.max(1, 0.07 * fF);
+            digitW = 0.58 * fF; chordGap = 0.05 * fF; minGap = 0.12 * fF;
+            for (i = 0; i < cols.length; i++) {
+              c = cols[i];
+              var n = c.members.length;
+              var scale = c.grace ? graceScale : 1;
+              var dw = digitW * scale;
+              var base = (c.grace && n > 1) ? (n * (dw + chordGap) - chordGap) : dw; // 装饰音并排横排（m02816）；柱式和弦纵向叠置列宽=单数字宽
+              var maxExt = base;
+              for (j = 0; j < n; j++) {
+                r = c.members[j];
+                var ext = base + 0.12 * fF + r.augDots * 0.28 * fF; // 增时线“-”已去除；附点间距加大更清晰
+                if (ext > maxExt) maxExt = ext;
+              }
+              c.base = base; c.w = maxExt; c.dw = dw; c.scale = scale;
+              c.left = c.x - base / 2; // 严格居中于 SVG 音符 x
+            }
+            cols.sort(function (p, q) { return p.left - q.left; });
+            for (i = 0; i < cols.length; i++) {
+              c = cols[i];
+              for (j = 0; j < c.members.length; j++) {
+                // 装饰音并排：横向逐个排开同一水平线（m02816）；柱式和弦：同 x 纵向叠置
+                c.members[j].digitX = (c.grace && c.members.length > 1) ? (c.left + j * (c.dw + chordGap)) : c.left;
+              }
+            }
+            return cols.length ? cols[cols.length - 1].left + cols[cols.length - 1].w : 0;
+          }
+          var right = layoutFor(pF);
+          for (var fit = 0; fit < 6 && right > groupW - 2 && pF > 9; fit++) {
+            pF = Math.max(9, pF * (groupW - 2) / right * 0.99);
+            right = layoutFor(pF);
+          }
+          // 垂直度量（柱式和弦：同列数字纵向叠置，低音在下、高音在上）
+          var vGap = 0.14 * pF;
+          for (i = 0; i < cols.length; i++) {
+            c = cols[i];
+            for (j = 0; j < c.members.length; j++) {
+              r = c.members[j];
+              var A = r.rest ? 0 : Math.max(0, r.oct);
+              var B = r.rest ? 0 : Math.max(0, -r.oct);
+              var L = r.grace ? 0 : r.under; // 装饰音不画减时线，也不占减时线高度
+              var top = A > 0 ? (0.62 * pF + (A - 1) * dotStep + dotR) : 0.5 * pF;
+              var underBot = L > 0 ? (0.52 * pF + (L - 1) * underGap + lineTh) : 0;
+              var lowDotBot = B > 0 ? ((L > 0 ? underBot + 0.20 * pF : 0.66 * pF) + (B - 1) * dotStep + dotR) : 0;
+              var bot = Math.max(0.5 * pF, underBot, lowDotBot);
+              r.topExt = top; r.botExt = bot; r.A = A; r.B = B;
+              r.upReach = top;
+              r.downReach = B > 0 ? (0.66 * pF + (B - 1) * dotStep + dotR) : 0.5 * pF;
+              r.vOff = 0;
+            }
+          }
+          var maxTop = 0.5 * pF, maxBot = 0.5 * pF;
+          for (i = 0; i < cols.length; i++) {
+            c = cols[i];
+            var n = c.members.length;
+            var isChord = n > 1 && !c.rest && !c.grace; // 装饰音并排不纵向叠置（m02816）
+            c.chordUnder = 0;
+            if (isChord) {
+              // members 已按 halfTone 升序（低→高）：j=0 最低，置底部
+              // 装饰音和弦用更紧凑的叠置间距（graceScale），避免小字号装饰音纵向重叠（需求 m02686 第2点）
+              var gsc = c.grace ? graceScale : 1;
+              var raw = [0];
+              for (j = 1; j < n; j++) {
+                var vstep = (c.members[j].downReach + c.members[j - 1].upReach + vGap) * gsc;
+                raw.push(raw[j - 1] - vstep);
+              }
+              var span = -raw[n - 1];
+              // 不居中：以最低音（j=0, raw=0）为整行水平基准线，上方音往上叠，
+              // 这样柱式和弦的最低音与单音同高，减时线/低音点定位一致。
+              for (j = 0; j < n; j++) c.members[j].vOff = raw[j];
+              var chordUnder = 0;
+              for (j = 0; j < n; j++) if (c.members[j].under > chordUnder) chordUnder = c.members[j].under;
+              c.chordUnder = chordUnder;
+              // 共享减时线在最低音下方；上方音不再单独画减时线
+              var bottom = c.members[0];
+              var sharedUnderBot = chordUnder > 0 ? (0.52 * pF + (chordUnder - 1) * underGap + lineTh) : 0;
+              var bottomLow = bottom.B > 0 ? (sharedUnderBot + 0.20 * pF + (bottom.B - 1) * dotStep + dotR) : 0;
+              bottom.botExt = Math.max(0.5 * pF, sharedUnderBot, bottomLow);
+              for (j = 1; j < n; j++) c.members[j].botExt = c.members[j].downReach;
+            }
+            c.topExt = 0.5 * pF; c.botExt = 0.5 * pF;
+            for (j = 0; j < n; j++) {
+              r = c.members[j];
+              var t = r.topExt - r.vOff;
+              var b = r.vOff + r.botExt;
+              if (t > c.topExt) c.topExt = t;
+              if (b > c.botExt) c.botExt = b;
+            }
+            if (c.topExt > maxTop) maxTop = c.topExt;
+            if (c.botExt > maxBot) maxBot = c.botExt;
+          }
+          // 弧线（先算几何，确定是否需要额外上方空间）
+          var arcs = jp2CollectArcs(blk, bi, cols, pF, dotStep, dotR);
+          var arcSpace = 0;
+          for (i = 0; i < arcs.length; i++) {
+            var d = arcs[i].apexDist + arcs[i].th;
+            if (arcs[i].kind === 'tuplet' && arcs[i].label) d = arcs[i].apexDist + 0.30 * pF; // 括号顶部数字高度
+            if (d > arcSpace) arcSpace = d;
+          }
+          // 转调 / 变拍号事件：本行小节范围内（不含首小节——首小节调号已在最左显示）相对上一小节的变化，
+          // 在简谱上方对应小节线处标注新调号 / 新拍号（需求 m01350）。
+          var changeEvents = [];
+          if (showKey && jp2Rich.measures) {
+            for (var mm = blk.jp2m0 + 1; mm <= blk.jp2m1; mm++) {
+              var curA = jp2Rich.measures[mm], prevA = jp2Rich.measures[mm - 1];
+              if (!curA || !prevA) continue;
+              var keyCh = curA.fifths !== prevA.fifths;
+              var timeCh = (curA.beats !== prevA.beats) || (curA.beatType !== prevA.beatType);
+              if (!keyCh && !timeCh) continue;
+              var bIdx = mm - blk.jp2m0;
+              var evX = (bars[bIdx] != null) ? (bars[bIdx] - cropLeft) * sx : null;
+              changeEvents.push({ mnum: mm, fifths: curA.fifths, beats: curA.beats, beatType: curA.beatType, keyCh: keyCh, timeCh: timeCh, x: evX });
+            }
+          }
+          var markSpace = 0, anyTimeCh = false, anyKeyCh = false;
+          for (i = 0; i < changeEvents.length; i++) { if (changeEvents[i].timeCh) anyTimeCh = true; if (changeEvents[i].keyCh) anyKeyCh = true; }
+          if (changeEvents.length) markSpace = (anyTimeCh ? 1.5 : 1.0) * pF;
+          // 左侧拍号分数式（首行或行首变拍号）需要额外上下空间，避免加大间距后分子/分母被裁切（需求 m02038）
+          if (showKey) {
+            var ra0 = jp2Rich.measures[blk.jp2m0], pa0 = jp2Rich.measures[blk.jp2m0 - 1];
+            var showLeftTs = (bi === 0) || (ra0 && pa0 && (ra0.beats !== pa0.beats || ra0.beatType !== pa0.beatType));
+            if (showLeftTs) {
+              var tsHalf = 0.74 * pF;
+              if (tsHalf > maxTop) maxTop = tsHalf;
+              if (tsHalf > maxBot) maxBot = tsHalf;
+            }
+          }
+          var padTop = 0.15 * pF, padBot = 0.22 * pF;
+          var y0 = padTop + markSpace + Math.max(maxTop, arcSpace);
+          var H = y0 + maxBot + padBot;
+          // 声部子行根 div（相对定位，正常流堆叠）
+          var inner = document.createElement('div');
+          inner.setAttribute('data-jp2-part', String(part));
+          inner.style.cssText = 'position:relative;width:' + groupW.toFixed(2) + 'px;height:' + H.toFixed(2) + 'px;overflow:visible;';
+          // 小节线
+          var barTop = y0 - Math.max(0.8 * pF, maxTop);
+          var barBot = y0 + Math.max(0.8 * pF, maxBot);
+          for (i = 1; i < bars.length; i++) {
+            var bx = (bars[i] - cropLeft) * sx;
+            if (bx < 0 || bx > groupW) continue;
+            // 全曲最后一小节用终止小节线（细线 + 粗线，粗线在右）
+            var isFinal = (bi === blocks.length - 1) && (i === bars.length - 1);
+            if (isFinal) {
+              var thickW = lineTh * 3;
+              var fGap = lineTh * 1.6;
+              jp2Rule(inner, bx - thickW / 2, barTop, thickW, barBot - barTop, '#000');
+              jp2Rule(inner, bx - thickW / 2 - fGap - lineTh, barTop, lineTh, barBot - barTop, '#000');
+            } else {
+              jp2Rule(inner, bx - lineTh / 2, barTop, lineTh, barBot - barTop, '#000');
+            }
+          }
+          // 升降号字号倍数：页面里写 window.KB_ACC_SCALE 手动调（相对数字字号 fs 的倍数，默认 0.55，调大更醒目）
+          var accScale = parseFloat(window.KB_ACC_SCALE);
+          if (!isFinite(accScale) || accScale <= 0) accScale = 0.55;
+          // 数字 / 八度点 / 增时线 / 附点 / 临时记号
+          for (i = 0; i < cols.length; i++) {
+            c = cols[i];
+            for (j = 0; j < c.members.length; j++) {
+              r = c.members[j];
+              var fs = pF * c.scale;
+              var dw2 = c.dw;
+              var dx = r.digitX;
+              var cy = y0 + (r.vOff || 0); // 柱式和弦各音纵向中心
+              var isChord = c.members.length > 1 && !c.grace && !c.rest;
+              var isBottom = isChord && j === 0;
+              var glyph = r.rest ? '0' : String(r.degree);
+              jp2Text(inner, dx, cy - fs / 2, dw2, fs, glyph, fs, JP2_NUM_FONT, '#000', 'center');
+              if (r.accSign) {
+                // 升降号字号/位置随数字字号 fs 同步缩放（fs=pF*c.scale）：谱面缩放、装饰音小字号时升降号一起变（需求 m02686 第1点）
+                // 字号倍数 accScale 可由页面 window.KB_ACC_SCALE 手动调（默认 0.55）；盒尺寸随字号同比放大，中心锚定数字左上不变
+                var afs = accScale * fs;
+                var ak = accScale / 0.55;
+                var aw = 0.46 * fs * ak, ah = 0.56 * fs * ak;
+                var acx = dx - 0.27 * fs, acy = cy - 0.40 * fs;
+                jp2Text(inner, acx - aw / 2, acy - ah / 2, aw, ah, r.accSign, afs, JP2_SYM_FONT, '#000', 'center');
+              }
+              for (var a = 0; a < r.A; a++) {
+                var hcy = cy - 0.62 * pF - a * dotStep;
+                jp2Dot(inner, dx + dw2 / 2, hcy, dotR);
+              }
+              var lowBase;
+              if (isChord && !isBottom) {
+                lowBase = cy + 0.66 * pF; // 柱式上方音：低音点紧贴数字下方
+              } else if (isBottom) {
+                lowBase = c.chordUnder > 0 ? (cy + 0.52 * pF + (c.chordUnder - 1) * underGap + lineTh + 0.20 * pF) : (cy + 0.66 * pF);
+              } else {
+                lowBase = r.under > 0 ? (cy + 0.52 * pF + (r.under - 1) * underGap + lineTh + 0.20 * pF) : (cy + 0.66 * pF);
+              }
+              for (var bb = 0; bb < r.B; bb++) {
+                var cy2 = lowBase + bb * dotStep;
+                jp2Dot(inner, dx + dw2 / 2, cy2, dotR);
+              }
+              r._beamedLevels = {};
+              // 增时线“-”已去除（时值由五线谱对齐体现）；附点保留，与八度点同一大小（清晰一致）
+              for (var ad = 0; ad < r.augDots; ad++) {
+                var dotX = dx + dw2 + 0.12 * pF + ad * 0.28 * pF;
+                jp2Dot(inner, dotX, cy, dotR);
+              }
+            }
+          }
+          jp2DrawUnderlines(blk, inner, cols, pF, y0, underGap, lineTh, digitW);
+          for (i = 0; i < arcs.length; i++) jp2DrawArc(inner, arcs[i], y0, pF, groupW);
+          // 高亮锚点块
+          var pBySi = {}, pAnchors = [];
+          for (i = 0; i < cols.length; i++) {
+            c = cols[i];
+            var hlTop = y0 - c.topExt - 0.12 * pF;
+            var hlH = c.topExt + c.botExt + 0.24 * pF;
+            var hl = document.createElement('div');
+            hl.className = 'SparksNMN-notehl jp2hl';
+            var isRestCol = c.rest;
+            var bg = isRestCol ? 'rgba(150,150,150,0.18)' : 'rgba(47,129,247,0.18)';
+            hl.style.cssText = 'position:absolute;left:' + (c.left - 0.10 * pF).toFixed(2) + 'px;top:' + hlTop.toFixed(2) + 'px;width:' + (c.w + 0.20 * pF).toFixed(2) + 'px;height:' + hlH.toFixed(2) + 'px;background:' + bg + ';visibility:hidden;border-radius:2px;';
+            inner.appendChild(hl);
+            var leadSi = -1;
+            for (j = 0; j < c.members.length; j++) { if (c.members[j].si >= 0) { leadSi = c.members[j].si; break; } }
+            var anchor = {
+              el: hl, cx: padX + c.left + c.w / 2, top: yOff + hlTop, w: c.w + 0.20 * pF,
+              snd: !isRestCol, row: '', _partList: null, si: leadSi, col: c, part: part
+            };
+            anchor._partList = [anchor];
+            c.anchor = anchor;
+            pAnchors.push(anchor);
+            for (j = 0; j < c.members.length; j++) {
+              var mr = c.members[j];
+              if (mr.si >= 0) pBySi[mr.si] = anchor;
+            }
+            if (leadSi >= 0) hl.setAttribute('data-si', String(leadSi));
+          }
+          // 调号 / 拍号（仅每个系统的第一个声部行显示）
+          if (showKey) {
+            // 最左调号同步「当前行」起始小节的调性（转调后各行显示各自的 1=X，需求 m01350）
+            var rowAttr = jp2Rich.measures[blk.jp2m0] || { fifths: jp2Rich.fifths, beats: jp2Rich.beats, beatType: jp2Rich.beatType };
+            var keyName = jianpuKeyName(rowAttr.fifths) || '1=C';
+            var firstLeft = cols.length ? cols[0].left : groupW;
+            var keyFs = 0.6 * pF;
+            var keyW = 1.3 * pF;
+            // 1=C 放在五线谱最左小节线的外侧（左边）：右缘紧贴该小节线左缘（容许负 x，渲染到左侧留白）
+            var bar0px = bars.length ? (bars[0] - cropLeft) * sx : 0;
+            var keyX = bar0px - keyW - 0.10 * pF;
+            var keyTop = y0 - keyFs / 2;
+            jp2Text(inner, keyX, keyTop, keyW, keyFs, keyName, keyFs, JP2_SYM_FONT, '#000', 'left');
+            // 拍号：首行第一节，或拍号在本行起始小节发生变化时，显示在左侧（需求 m01986 第2点）
+            var prevAttr = jp2Rich.measures[blk.jp2m0 - 1];
+            var rowTimeCh = prevAttr && (rowAttr.beats !== prevAttr.beats || rowAttr.beatType !== prevAttr.beatType);
+            if (bi === 0 || rowTimeCh) {
+              // 拍号放在最左小节线右侧、与 1=C 拉开距离（避免调号/拍号重叠），且仍在首列音符左侧
+              var tsLeft = bar0px + 1.0 * pF;
+              var tsFs = 0.55 * pF;
+              if (firstLeft > tsLeft + 0.8 * pF) {
+                jp2TimeSig(inner, tsLeft, y0, 0.7 * pF, tsFs, rowAttr.beats, rowAttr.beatType);
+              }
+            }
+            // 行内转调 / 变拍号：在简谱上方对应小节线处标注新调号 / 新拍号
+            for (var ei = 0; ei < changeEvents.length; ei++) {
+              var ev = changeEvents[ei];
+              if (ev.x == null) continue;
+              var mFs = 0.6 * pF, mW = 1.7 * pF, my = padTop;
+              var tFs = 0.5 * pF;
+              if (ev.keyCh && ev.timeCh) {
+                // 调号与拍号同一水平并排（需求 m03084）：调号在左、拍号在右，整体居中于小节线，竖直中心对齐，不再上下叠放
+                var keyW2 = mW, timeW2 = 0.7 * pF, gap2 = 1.0 * pF;
+                var totalW = keyW2 + gap2 + timeW2;
+                var bandH = 2.6 * tFs;                 // 拍号分数式整体高
+                var ccy = my + bandH / 2;              // 调号 / 拍号共同的竖直中心
+                var gLeft = ev.x - totalW / 2;
+                if (gLeft < 2) gLeft = 2;
+                if (gLeft + totalW > groupW - 2) gLeft = groupW - 2 - totalW;
+                jp2Text(inner, gLeft, ccy - mFs / 2, keyW2, mFs, jianpuKeyName(ev.fifths) || '1=C', mFs, JP2_SYM_FONT, '#000', 'center');
+                jp2TimeSig(inner, gLeft + keyW2 + gap2, ccy, timeW2, tFs, ev.beats, ev.beatType);
+              } else {
+                if (ev.keyCh) {
+                  jp2Text(inner, ev.x - mW / 2, my, mW, mFs, jianpuKeyName(ev.fifths) || '1=C', mFs, JP2_SYM_FONT, '#000', 'center');
+                }
+                if (ev.timeCh) {
+                  // 分数式拍号（分子+横线+分母），整体顶部对齐 my
+                  jp2TimeSig(inner, ev.x - 0.35 * pF, my + 0.30 * tFs + tFs, 0.7 * pF, tFs, ev.beats, ev.beatType);
+                }
+              }
+            }
+          }
+          return { root: inner, bySi: pBySi, anchors: pAnchors, h: H, cols: cols };
+        }
+
+        // 声部行之间留出间隔（按需求 m01095：声部要有间隔距离）
+        var partGap = Math.max(8, Math.round(0.5 * F));
+        for (var pi = 0; pi < parts.length; pi++) {
+          var pp = parts[pi];
+          var pcols = partCols[pp] || [];
+          var rr = renderPart(pcols, pp, pi === 0, yOffset);
+          container.appendChild(rr.root);
+          var gapAfter = (pi < parts.length - 1) ? partGap : 0;
+          rr.root.style.marginBottom = gapAfter + 'px';
+          yOffset += rr.h + gapAfter;
+          for (var kk in rr.bySi) bySi[kk] = rr.bySi[kk];
+          anchors = anchors.concat(rr.anchors);
+          allCols = allCols.concat(rr.cols);
+          rows.push({ part: pp, inner: rr.root, h: rr.h, cols: rr.cols });
+        }
+        container.style.height = yOffset.toFixed(2) + 'px';
+        // 装进 .flowJp
+        var jpEl = blk.jpEl;
+        if (!jpEl) {
+          jpEl = document.createElement('div');
+          jpEl.className = 'flowJp';
+          blk.jpEl = jpEl;
+          if (HORIZ && blk.el && blk.el.parentElement && blk.el.parentElement.classList.contains('flowCol')) {
+            blk.el.parentElement.appendChild(jpEl);
+          } else if (blk.el && blk.el.parentElement) {
+            blk.el.parentElement.insertBefore(jpEl, blk.el.nextSibling);
+          } else {
+            var host = hostEl(); if (host) host.appendChild(jpEl);
+          }
+        }
+        jpEl.innerHTML = '';
+        jpEl.setAttribute('data-jp2', '1');
+        // 与 .flowSys 同一盒模型（border-box + 宽度自适应 + 水平 padding=padX），
+        // 容器 margin:0 auto 居中 → 简谱与五线谱 SVG 的 x 原点完全一致（小节线/音符严格对齐）。
+        var vPad = HORIZ ? 4 : 10;
+        jpEl.style.width = '';
+        jpEl.style.height = (yOffset + 2 * vPad).toFixed(2) + 'px';
+        jpEl.style.padding = (HORIZ ? '4px ' : '0px ') + padX + 'px';
+        jpEl.style.margin = HORIZ ? '0px 0 0' : '0px auto 0';
+        jpEl.style.boxSizing = 'border-box';
+        jpEl.appendChild(container);
+        blk.jp2 = { inner: container, bySi: bySi, anchors: anchors, padX: padX, w: groupW, h: yOffset, cols: allCols, rows: rows };
+      }
+
+      function jp2Dot(parent, cx, cy, r) {
+        var d = Math.max(1.2, r * 2);
+        var div = jp2Div(parent, cx - d / 2, cy - d / 2, d, d, '#000');
+        // 圆点用 clip-path 近似圆（16 边形，更圆滑清晰）
+        var poly = [], N = 16;
+        for (var i = 0; i < N; i++) {
+          var ang = i / N * Math.PI * 2;
+          poly.push((50 + 50 * Math.cos(ang)).toFixed(2) + '% ' + (50 + 50 * Math.sin(ang)).toFixed(2) + '%');
+        }
+        div.style.clipPath = 'polygon(' + poly.join(',') + ')';
+        div.style.boxShadow = '0 0 0 0 #000';
+        return div;
+      }
+
+      // 减时线：按 (part,voice,beam level) 的 begin/continue/end 画连接线，其余单音画短线。
+      function jp2DrawUnderlines(blk, inner, cols, F, y0, underGap, lineTh, digitW) {
+        var i, j, r;
+        for (i = 0; i < cols.length; i++) {
+          cols[i]._beamedLevels = {};
+          for (j = 0; j < cols[i].members.length; j++) { r = cols[i].members[j]; r._cy = y0 + (r.vOff || 0); }
+        }
+        // 减时线统一基线高度：符杠/和弦共享/单音减时线都画在同一水平基线，层级递增 underGap（需求 m02596 第2点：高度一致）
+        var baseY = y0 + 0.52 * F;
+        // 连接符杠：按 XML beam（part|voice|level 的 begin/continue/end）分组，与五线谱符杠链接方式一致（需求 m02596 第1点）
+        var recs = [];
+        for (i = 0; i < cols.length; i++) for (j = 0; j < cols[i].members.length; j++) recs.push(cols[i].members[j]);
+        recs.sort(function (p, q) { return p.docOrder - q.docOrder; });
+        var open = {}, spans = [];
+        for (i = 0; i < recs.length; i++) {
+          r = recs[i]; if (r.rest || r.grace) continue;
+          for (j = 0; j < r.beams.length; j++) {
+            var bm = r.beams[j], lvl = bm.number || 1, key = r.part + '|' + r.voice + '|' + lvl;
+            if (bm.value === 'begin') open[key] = { level: lvl, notes: [r] };
+            else if (bm.value === 'continue' || bm.value === 'end') {
+              var sp = open[key]; if (!sp) { sp = open[key] = { level: lvl, notes: [] }; }
+              sp.notes.push(r);
+              if (bm.value === 'end') { spans.push(sp); delete open[key]; }
+            }
+          }
+        }
+        for (var ok in open) if (open[ok].notes.length >= 2) spans.push(open[ok]);
+        // 标记被符杠覆盖的层级（记在「列」上：柱式和弦任一成员带 beam 即整列被覆盖，避免重复画线）
+        for (i = 0; i < spans.length; i++) {
+          var spn = spans[i];
+          for (j = 0; j < spn.notes.length; j++) {
+            var nc = spn.notes[j].col; if (nc) { nc._beamedLevels = nc._beamedLevels || {}; nc._beamedLevels[spn.level] = spn; }
+          }
+        }
+        // 画连接符杠：同一基线高度，水平连接整组（宽度随组跨度，厚度 lineTh 统一）
+        var drawn = {};
+        for (i = 0; i < spans.length; i++) {
+          var s = spans[i]; if (s.notes.length < 2) continue;
+          var key2 = s.level + '|' + s.notes[0].docOrder + '|' + s.notes[s.notes.length - 1].docOrder;
+          if (drawn[key2]) continue; drawn[key2] = true;
+          var first = s.notes[0], last = s.notes[s.notes.length - 1];
+          var x0 = first.digitX, x1 = last.digitX + (last.col ? last.col.dw : digitW);
+          var y = baseY + (s.level - 1) * underGap;
+          jp2Rule(inner, x0, y - lineTh / 2, Math.max(0.6, x1 - x0), lineTh, '#000');
+        }
+        // 柱式和弦共享减时线（未被符杠覆盖的层级），同一基线、等宽 digitW
+        for (i = 0; i < cols.length; i++) {
+          var cc = cols[i];
+          if (!(cc.members.length > 1 && !cc.grace && !cc.rest)) continue;
+          for (var cl = 1; cl <= cc.chordUnder; cl++) {
+            if (cc._beamedLevels && cc._beamedLevels[cl]) continue;
+            var cyy = baseY + (cl - 1) * underGap;
+            jp2Rule(inner, cc.left, cyy - lineTh / 2, digitW, lineTh, '#000');
+          }
+        }
+        // 单音减时线（未被符杠覆盖），同一基线、等宽 digitW
+        for (i = 0; i < cols.length; i++) {
+          var c2 = cols[i];
+          if (c2.members.length > 1 && !c2.grace && !c2.rest) continue;
+          for (j = 0; j < c2.members.length; j++) {
+            r = c2.members[j];
+            if (r.rest || r.grace) continue;
+            for (var lv = 1; lv <= r.under; lv++) {
+              if (c2._beamedLevels && c2._beamedLevels[lv]) continue;
+              var yy = baseY + (lv - 1) * underGap;
+              jp2Rule(inner, r.digitX, yy - lineTh / 2, digitW, lineTh, '#000');
+            }
+          }
+        }
+      }
+
+      // 收集弧线（tie/slur/tuplet/grace），几何用「距 y0 上方距离」表示。
+      function jp2CollectArcs(blk, bi, cols, F, dotStep, dotR) {
+        var arcs = [];
+        var i, j, r;
+        var recs = [];
+        for (i = 0; i < cols.length; i++) for (j = 0; j < cols[i].members.length; j++) recs.push(cols[i].members[j]);
+        recs.sort(function (p, q) { return p.docOrder - q.docOrder; });
+        function topOf(rr) { return (rr.topExt || 0.5 * F) - (rr.vOff || 0); }
+        function colOf(rr) { return rr.col; }
+        function noteX(rr) { return rr.digitX + (rr.col ? rr.col.dw : 0.62 * F) / 2; }
+        // tie：按 part|voice|midi FIFO
+        var tieQ = {};
+        for (i = 0; i < recs.length; i++) {
+          r = recs[i];
+          if (r.rest) continue;
+          var tk = r.part + '|' + r.voice + '|' + r.halfTone;
+          if (r.tieStop && tieQ[tk] && tieQ[tk].length) {
+            var from = tieQ[tk].shift();
+            arcs.push(jp2MakeArc(from, r, 'tie', F, bi));
+          }
+          if (r.tieStart) { (tieQ[tk] = tieQ[tk] || []).push(r); }
+        }
+        // 连奏线（slur）弧线已去除：简谱只保留延音线（tie）与三连音直角括号（需求 m02686）。
+        // tuplet：按 part|number
+        var tupQ = {};
+        for (i = 0; i < recs.length; i++) {
+          r = recs[i];
+          for (j = 0; j < r.tuplets.length; j++) {
+            var tp = r.tuplets[j];
+            var tuk = r.part + '|' + tp.number;
+            if (tp.type === 'start') { (tupQ[tuk] = tupQ[tuk] || []).push({ rec: r, actual: tp.actual }); }
+            else if (tp.type === 'stop') {
+              if (tupQ[tuk] && tupQ[tuk].length) {
+                var tf = tupQ[tuk].shift();
+                var ta = jp2MakeArc(tf.rec, r, 'tuplet', F, bi);
+                ta.label = String(tf.actual || '');
+                // 横梁高度取整组连音跨度的最高音符（含中间和弦），避免括号压到音符
+                var fc2 = tf.rec.col, tc2 = r.col, spanMax = 0;
+                if (fc2 && tc2) {
+                  var loX = Math.min(fc2.left, tc2.left) - 0.01, hiX = Math.max(fc2.left, tc2.left) + 0.01;
+                  for (var ci = 0; ci < cols.length; ci++) {
+                    var cc = cols[ci];
+                    if (cc.left >= loX && cc.left <= hiX && cc.topExt > spanMax) spanMax = cc.topExt;
+                  }
+                }
+                if (spanMax > 0) ta.apexDist = spanMax + 0.55 * F;
+                arcs.push(ta);
+              }
+            }
+          }
+        }
+        // 装饰音不画弧线（按需求 m01095：装饰音不需要弧线）
+        return arcs;
+      }
+
+      function jp2MakeArc(fromRec, toRec, kind, F, bi) {
+        var fc = fromRec.col, tc = toRec.col;
+        var sameRow = (fc && tc && fc.bi === bi && tc.bi === bi);
+        var x0, x1, apexDist, th = Math.max(1, 0.06 * F);
+        var fTop = (fromRec.topExt || 0.5 * F) - (fromRec.vOff || 0), tTop = (toRec.topExt || 0.5 * F) - (toRec.vOff || 0);
+        var fx = fromRec.digitX + (fc ? fc.dw : 0.62 * F) / 2;
+        var tx = toRec.digitX + (tc ? tc.dw : 0.62 * F) / 2;
+        if (kind === 'tie') {
+          x0 = fromRec.digitX + (fc ? fc.dw : 0.62 * F) + 0.06 * F;
+          x1 = toRec.digitX - 0.06 * F;
+          apexDist = Math.max(fTop, tTop) + 0.16 * F + 0.20 * F;
+        } else if (kind === 'grace') {
+          x0 = fx; x1 = tx;
+          apexDist = Math.max(fTop, tTop) + 0.18 * F + 0.20 * F;
+        } else if (kind === 'tuplet') {
+          // 直角括号：横梁盖住整组连音，两端竖腿向下；x 范围扩到首尾数字外侧
+          x0 = fromRec.digitX - 0.10 * F;
+          x1 = toRec.digitX + (tc ? tc.dw : 0.62 * F) + 0.10 * F;
+          apexDist = Math.max(fTop, tTop) + 0.55 * F;
+        } else { // slur
+          x0 = fx; x1 = tx;
+          apexDist = Math.max(fTop, tTop) + 0.30 * F + 0.40 * F;
+        }
+        return { kind: kind, from: fromRec, to: toRec, x0: x0, x1: x1, apexDist: apexDist, th: th, sameRow: sameRow, bi: bi, label: '' };
+      }
+
+      function jp2DrawArc(inner, arc, y0, F, groupW) {
+        var x0 = arc.x0, x1 = arc.x1;
+        var baseY0 = y0 - ((arc.from.topExt || 0.5 * F) - (arc.from.vOff || 0)) + 0.02 * F;
+        var baseY1 = y0 - ((arc.to.topExt || 0.5 * F) - (arc.to.vOff || 0)) + 0.02 * F;
+        var apexY = y0 - arc.apexDist;
+        // 连音（三连音/四连音…）：直角括号盖住整组，顶部中央显示数字（需求 m01881）
+        if (arc.kind === 'tuplet') {
+          if (x1 < x0) { var tt = x0; x0 = x1; x1 = tt; }
+          var bY = apexY, legH = 0.30 * F, bth = arc.th;
+          var numFs = 0.50 * F, numW = 0.55 * F, mid = (x0 + x1) / 2, gap = numW + 0.16 * F;
+          if (arc.sameRow) {
+            var gl = mid - gap / 2, gr = mid + gap / 2;
+            if (gl > x0) jp2Rule(inner, x0, bY, gl - x0, bth, '#000');
+            if (x1 > gr) jp2Rule(inner, gr, bY, x1 - gr, bth, '#000');
+            jp2Rule(inner, x0, bY, bth, legH, '#000');
+            jp2Rule(inner, x1 - bth, bY, bth, legH, '#000');
+          } else {
+            var toRight2 = (arc.to.col && arc.to.col.bi > arc.bi);
+            if (toRight2) {
+              jp2Rule(inner, x0, bY, groupW - 1 - x0, bth, '#000');
+              jp2Rule(inner, x0, bY, bth, legH, '#000');
+            } else {
+              jp2Rule(inner, 1, bY, x1 - 1, bth, '#000');
+              jp2Rule(inner, x1 - bth, bY, bth, legH, '#000');
+            }
+          }
+          if (arc.label) jp2Text(inner, mid - numW / 2, bY - numFs / 2, numW, numFs, arc.label, numFs, JP2_NUM_FONT, '#000', 'center');
+          return;
+        }
+        if (arc.sameRow) {
+          if (x1 < x0) { var tmp = x0; x0 = x1; x1 = tmp; }
+          jp2Arc(inner, x0, baseY0, x1, baseY1, apexY, arc.th, '#000');
+          if (arc.label) {
+            jp2Text(inner, (x0 + x1) / 2 - 0.3 * F, apexY - 0.55 * F, 0.6 * F, 0.5 * F, arc.label, 0.45 * F, JP2_NUM_FONT, '#000', 'center');
+          }
+        } else {
+          // 跨行：画到行边缘的半弧
+          var toRight = (arc.to.col && arc.to.col.bi > arc.bi);
+          if (toRight) {
+            jp2Arc(inner, x0, baseY0, groupW - 1, apexY + 0.1 * F, apexY, arc.th, '#000');
+          } else {
+            jp2Arc(inner, 1, apexY + 0.1 * F, x1, baseY1, apexY, arc.th, '#000');
+          }
+        }
+      }
+
+      // jp2 锚点查询：jpAnchorFor 顶部拦截后走这里。
+      function jp2AnchorFor(blk, si) {
+        // 用户要求：删除简谱自身的音符高亮，改用五线谱播放滚动框（已延长到简谱位置）。
+        // 返回 null → jpHighlightAt / buildHiEls / jpHiSounding 都不再点亮简谱锚点。
+        return null;
+      }
       function buildFlow(forceW) {
         var host = hostEl();
         if (!host) return;
@@ -4045,7 +5151,14 @@
             var ppos = matrixXY(pnEls[pn]);
             if (ppos) pageNotes.push(ppos);
           }
-          var winTop = sys.top + 230, winBot = sys.bottom - 230;
+          // 上界放到「上一系统底与本系统顶的中点」，这样高音 / 加线音符才会被纳入 minY，
+          // 又不会把上一系统的低音（加线）抓进来——否则上一系统低音落在本系统裁剪窗里，
+          // 会在两系统之间留下残留音符（如 m63-66 与 m67-70 之间）。首系统则本系统顶上方 400。
+          // 下界仍收 230，避免抓到下一系统的音符。
+          var sysIdx = pg.systems.indexOf(sys);
+          var prevSys = sysIdx > 0 ? pg.systems[sysIdx - 1] : null;
+          var winTop = prevSys ? (prevSys.bottom + sys.top) / 2 : sys.top - 400;
+          var winBot = sys.bottom - 230;
           var minY = Infinity, maxY = -Infinity;
           for (pn = 0; pn < pageNotes.length; pn++) {
             if (pageNotes[pn].y < winTop || pageNotes[pn].y > winBot) continue;
@@ -4144,7 +5257,8 @@
           groupW = Math.max(240, Math.round(kH * Math.max(1, HCROPW)));
         }
 
-        var jpAll = buildJpSections(groupW);
+        // jp2：有 MusicXML 富解析结果时不再用 efData 简谱，改由 buildJp2Rows 按 SVG 坐标生成。
+        var jpAll = (score && jp2Rich) ? [] : buildJpSections(groupW);
         var jpLines = [];
         for (var ji = 0; ji < jpAll.length; ji++) {
           if (/^musicLine--/.test(String(jpAll[ji].sec.label || ''))) jpLines.push(jpAll[ji]);
@@ -4279,6 +5393,9 @@
           blocks[biN].noteTo = accN;
         }
 
+        // jp2：用 MusicXML+SVG 生成简谱行（取代 efData）。在 noteFrom/noteTo 之后、锚点统计之前。
+        try { if (score && jp2Rich) buildJp2Rows(groupW); } catch (eJp2) { try { console.warn('[jp2] 渲染失败', eJp2); } catch (eL) { } }
+
         var w = wrapEl();
         if (w) w.hidden = (blocks.length === 0);
         ensureCursor();
@@ -4389,6 +5506,7 @@
       function fixJpDots() {
         var lines = document.querySelectorAll('.flowJp');
         for (var li = 0; li < lines.length; li++) {
+          if (lines[li].getAttribute('data-jp2')) continue; // jp2 行自己管八度点，不走 efData 防碰撞
           var spans = lines[li].querySelectorAll('span');
           var items = [];
           for (var k = 0; k < spans.length; k++) {
@@ -4645,6 +5763,9 @@
         var b = cursorEl(), host = hostEl();
         if (!b) { b = document.createElement('div'); b.id = 'svgCursor'; }
         if (host && b.parentNode !== host) host.appendChild(b);
+        var j = cursorJpEl();
+        if (!j) { j = document.createElement('div'); j.id = 'jpCursor'; }
+        if (host && j.parentNode !== host) host.appendChild(j);
         return b;
       }
 
@@ -5322,6 +6443,8 @@
       // 第 k 个音符对应的简谱锚点：先在本小节里找最接近目标比例的一列，
       // 本小节没有锚点时才退回整行（和弦 / 多声部的锚点 x 相同，jpHighlightAt 统一点亮）
       function jpAnchorFor(blk, k) {
+        // jp2 行有精确的 si→列 锚点，直接走它，绕开 efData 的声部/比例启发式。
+        if (blk && blk.jp2) return jp2AnchorFor(blk, k);
         // 先走「声部内按顺序」这条路：本曲有两条简谱线各少 2 个音，
         // 靠小节号/比例都会偏，按声部顺序反而最准。
         var byOrder = null;
@@ -5673,8 +6796,10 @@
 
       function positionSvgCursorAt(k, siLead) {
         var box = cursorEl();
+        var jpBox = cursorJpEl();
         if (!flowReady || k < 0 || k >= svgFlat.length) {
           if (box) box.style.display = 'none';
+          if (jpBox) jpBox.style.display = 'none';
           clearJpHi();
           return;
         }
@@ -5682,6 +6807,7 @@
         var blk = blocks[it.blk];
         if (!blk) {
           if (box) box.style.display = 'none';
+          if (jpBox) jpBox.style.display = 'none';
           clearJpHi();
           return;
         }
@@ -5708,27 +6834,75 @@
         if (!box) return;
         var host = hostEl();
         var svgEl = blk.svg || blk.el.querySelector('svg');
-        if (!host || !svgEl) { box.style.display = 'none'; return; }
+        if (!host || !svgEl) { box.style.display = 'none'; if (jpBox) jpBox.style.display = 'none'; return; }
         var hr = host.getBoundingClientRect();
         var sr = svgEl.getBoundingClientRect();
-        if (!sr.width || !sr.height) { box.style.display = 'none'; return; }
+        if (!sr.width || !sr.height) { box.style.display = 'none'; if (jpBox) jpBox.style.display = 'none'; return; }
 
         var kk = sr.width / blk.vbW;
         var leftC = (sr.left - hr.left) + (it.x + 16 - (blk.vbLeft || 0)) * kk;   // +16：符头中心
         var topC = (sr.top - hr.top) + (blk.staffTop - blk.vbTop) * kk;
-        var botC = (sr.top - hr.top) + (blk.staffBottom - blk.vbTop) * kk;
+        var botC = (sr.top - hr.top) + (blk.staffBottom - blk.vbTop) * kk;   // 五线谱框底（不再延长到简谱）
+        // 简谱独立播放框：高度 = 当前小节在「所有声部」内的内容高度（跨 P1/P2 多声部，取该小节各列内容的纵向范围），
+        // 每个小节各自的高度，不是整个 .flowJp 总高度；与五线谱框做颜色区分（用户要求 m01232 / m01431 / m01475）
+        var jpTopC = NaN, jpBotC = NaN;
+        if (blk.jp2 && blk.jpEl) {
+          try {
+            var siJp = (siLead != null && siLead >= 0) ? siLead : scoreOfSvg(k);
+            var ancJp = (blk.jp2.bySi && siJp >= 0) ? blk.jp2.bySi[siJp] : null;
+            var curMnum = null;
+            if (ancJp && ancJp.col && ancJp.col.members) {
+              for (var mi = 0; mi < ancJp.col.members.length; mi++) {
+                if (ancJp.col.members[mi].mnum != null) { curMnum = ancJp.col.members[mi].mnum; break; }
+              }
+            }
+            if (curMnum != null && blk.jp2.anchors) {
+              var mTop = Infinity, mBot = -Infinity;
+              for (var ai = 0; ai < blk.jp2.anchors.length; ai++) {
+                var an = blk.jp2.anchors[ai];
+                if (!an.col || !an.col.members || !an.el) continue;
+                var inM = false;
+                for (var mj = 0; mj < an.col.members.length; mj++) {
+                  if (an.col.members[mj].mnum === curMnum) { inM = true; break; }
+                }
+                if (!inM) continue;
+                var ar = an.el.getBoundingClientRect();
+                if (ar.top < mTop) mTop = ar.top;
+                if (ar.bottom > mBot) mBot = ar.bottom;
+              }
+              if (isFinite(mTop) && isFinite(mBot)) { jpTopC = mTop - hr.top; jpBotC = mBot - hr.top; }
+            }
+            if (!isFinite(jpTopC) || !isFinite(jpBotC)) {
+              var jrC = blk.jpEl.getBoundingClientRect();
+              jpTopC = jrC.top - hr.top;
+              jpBotC = jrC.bottom - hr.top;
+            }
+          } catch (eJpC) { }
+        }
         if (!isFinite(leftC) || !isFinite(topC) || botC - topC < 4) {
           box.style.display = 'none';
+          if (jpBox) jpBox.style.display = 'none';
           return;
         }
 
-        box.style.display = 'block';
         // 框宽按谱面缩放走：70 个 viewBox 单位 ≈ 两个符头宽
         var bw = Math.max(8, Math.round(70 * kk));
+        box.style.display = 'block';
         box.style.left = Math.round(leftC - bw / 2) + 'px';
         box.style.top = Math.round(topC) + 'px';
         box.style.width = bw + 'px';
         box.style.height = Math.round(botC - topC) + 'px';
+        if (jpBox) {
+          if (isFinite(jpTopC) && isFinite(jpBotC) && jpBotC - jpTopC >= 4) {
+            jpBox.style.display = 'block';
+            jpBox.style.left = Math.round(leftC - bw / 2) + 'px';
+            jpBox.style.top = Math.round(jpTopC) + 'px';
+            jpBox.style.width = bw + 'px';
+            jpBox.style.height = Math.round(jpBotC - jpTopC) + 'px';
+          } else {
+            jpBox.style.display = 'none';
+          }
+        }
         if (HORIZ) {
           var nb = (k + 1 < svgFlat.length) ? svgFlat[k + 1].blk : -1;
           var bk = blocks[it.blk];
@@ -6077,6 +7251,194 @@
         return true;
       }
 
+      // ================= 点击谱面定位（暂停态） =================
+      // 暂停时点击五线谱或简谱的音符区域 → 播放滚动框移到该位置、键盘点亮该组音符，
+      // 再点「播放」即从该处续播（togglePlay 的 startTime===0 分支天然支持）。
+      // 命中优先级：点击点正下方的 .Note 元素 → 所在块内最近符头 → 简谱锚点几何。
+
+      // 一组的「起播时刻」：以 GROUPS.t[g] 为基准，尽量提前到组内最早发声音
+      //（不切掉琶音首音）；只允许提前 0.3s 以内，避免被错配音拽早。
+      function groupSeekTime(g) {
+        var t0 = GROUPS.t[g];
+        if (!(t0 >= 0)) return 0;
+        var grp = GROUPS.list[g], earliest = t0;
+        for (var i = 0; i < grp.members.length; i++) {
+          var v = GROUPS.tOf[grp.members[i]];
+          if (v >= 0 && v < earliest && t0 - v <= 0.3) earliest = v;
+        }
+        return Math.max(0, earliest - 0.05);   // 留 50ms 引入，音头不被切
+      }
+
+      // 暂停态键盘预览：点亮该组音符对应的键。播放时由 tick 按 active 亮键，
+      // 暂停时没有 tick，这里手动亮一次，并登记进 prevOn/pressedStyle 供 clearHighlights 统一收。
+      function previewKeysForGroup(g, t) {
+        if (!GROUPS || g < 0 || g >= GROUPS.list.length) return;
+        var grp = GROUPS.list[g];
+        var memberSet = {}, i, si;
+        for (i = 0; i < grp.members.length; i++) memberSet[grp.members[i]] = 1;
+        var lit = {}, list = [];
+        if (scoreMap) {
+          var lo = firstNoteIndexAtOrAfter(Math.max(0, t - 0.35));
+          for (i = lo; i < notes.length && notes[i].time <= t + 0.8; i++) {
+            si = scoreMap[i];
+            if (si >= 0 && memberSet[si] && !lit[notes[i].midi]) {
+              lit[notes[i].midi] = 1;
+              list.push(notes[i]);
+            }
+          }
+        }
+        if (!list.length) {   // 兜底：对齐表没给这组配上 MIDI 音时，按谱面音高亮键
+          for (i = 0; i < grp.members.length; i++) {
+            var r = score && score.notes[grp.members[i]];
+            if (r && typeof r.halfTone === 'number' && !lit[r.halfTone]) {
+              lit[r.halfTone] = 1;
+              list.push({ midi: r.halfTone });
+            }
+          }
+        }
+        for (i = 0; i < list.length; i++) {
+          var n = list[i], el = keyEls[n.midi];
+          if (!el) continue;
+          el.style.setProperty('--c', colorOf(n));
+          el.classList.add('on');
+          el.style.transform = 'translateY(1px)';
+          prevOn[n.midi] = 1;
+          pressedStyle[n.midi] = 'translateY(1px)';
+        }
+      }
+
+      // 定位到一组：暂停 → 挪播放位置 → 滚动框/简谱高亮 → 键盘预览。
+      function seekToGroup(g, srcLabel) {
+        if (!notes.length || !GROUPS || g < 0 || g >= GROUPS.list.length) return false;
+        var t = groupSeekTime(g);
+        playing = false;
+        playBtn.textContent = '播放';
+        try { document.body.classList.toggle('cleanplay', false); } catch (e1) { }
+        try { if (ac) ac.suspend(); } catch (e2) { }
+        stopAllNodes();
+        startTime = 0;
+        playFromTime = t;
+        schedPtr = firstNoteIndexAtOrAfter(t);
+        visPtr = schedPtr;
+        lastStart = {};
+        active = [];
+        recentOn = [];
+        curMeasureNo = -1;
+        try { clearHighlights(); } catch (e3) { }
+        barfill.style.width = (total > 0 ? Math.min(100, t / total * 100) : 0) + '%';
+        timeEl.textContent = fmt(t) + ' / ' + fmt(total);
+        // 滚动框/简谱：整组落位（positionSvgCursorAt 内部会 ensureBlockVisible 滚动到该行）
+        var ok = false;
+        try { ok = seekGroupToScore(GROUPS.list[g].lead); } catch (e4) { }
+        if (!ok) { try { previewAtTime(t); } catch (e5) { } }
+        // 键盘：点亮该组音符
+        try { previewKeysForGroup(g, t); } catch (e6) { }
+        // 同步「从第 N 小节开始」下拉（不触发 change，避免把 playFromTime 覆写成小节起点）
+        var meas = GROUPS.list[g].measure;
+        if (startMeasSel && meas >= 0) {
+          try { startMeasSel.value = String(meas + 1); } catch (e7) { }
+        }
+        if (statusEl) {
+          statusEl.textContent = '已定位到第 ' + (meas + 1) + ' 小节' + (srcLabel ? '（' + srcLabel + '）' : '') +
+            ' ' + fmt(t) + '，点「播放」从这里继续';
+        }
+        return true;
+      }
+
+      function seekToScoreIndex(si) {
+        if (!GROUPS) { try { buildGroups(); } catch (e) { } }
+        if (!GROUPS || si < 0 || si >= GROUPS.ofScore.length) return false;
+        var g = GROUPS.ofScore[si];
+        if (g < 0) return false;
+        return seekToGroup(g);
+      }
+
+      // 点击点 → 谱面音符下标。返回 { si, k, src } 或 null。
+      function scoreHitFromPoint(cx, cy, target) {
+        if (!flowReady || !svgFlat.length) return null;
+        var i, blk, sr, kk, vx, vy;
+        // 1) 五线谱：直接命中 .Note 元素（符头 path）
+        var noteEl = null;
+        try { if (target && target.closest) noteEl = target.closest('.Note'); } catch (eN) { }
+        if (noteEl) {
+          for (i = 0; i < svgFlat.length; i++) {
+            if (svgFlat[i].el === noteEl) {
+              var si0 = scoreOfSvg(i);
+              if (si0 >= 0) return { si: si0, k: i, src: '五线谱' };
+              break;
+            }
+          }
+        }
+        // 2) 五线谱：点击点所在块 → 换算 viewBox 坐标 → 最近符头 (x+16, y)
+        for (i = 0; i < blocks.length; i++) {
+          blk = blocks[i];
+          var svgEl = blk.svg || (blk.el && blk.el.querySelector('svg'));
+          if (!svgEl) continue;
+          sr = svgEl.getBoundingClientRect();
+          if (!sr.width || !sr.height) continue;
+          if (cx < sr.left - 4 || cx > sr.right + 4 || cy < sr.top - 4 || cy > sr.bottom + 4) continue;
+          kk = sr.width / blk.vbW;
+          vx = (cx - sr.left) / kk + (blk.vbLeft || 0);
+          vy = (cy - sr.top) / kk + blk.vbTop;
+          var best = -1, bestD = Infinity;
+          for (var q = blk.noteFrom || 0; q < (blk.noteTo || 0); q++) {
+            var it = svgFlat[q];
+            var dx = (it.x + 16) - vx, dy = it.y - vy;
+            var d = dx * dx + dy * dy;
+            if (d < bestD) { bestD = d; best = q; }
+          }
+          if (best >= 0) {
+            var si1 = scoreOfSvg(best);
+            if (si1 >= 0) return { si: si1, k: best, src: '五线谱' };
+          }
+          return null;
+        }
+        // 3) 简谱：点击点所在 .flowJp → 锚点块几何（包含优先，否则最近中心）
+        for (i = 0; i < blocks.length; i++) {
+          blk = blocks[i];
+          if (!blk.jpEl || !blk.jp2 || !blk.jp2.anchors || !blk.jp2.anchors.length) continue;
+          var jr = blk.jpEl.getBoundingClientRect();
+          if (!jr.width || cx < jr.left || cx > jr.right || cy < jr.top || cy > jr.bottom) continue;
+          var bestA = null, bestAD = Infinity, inside = null, insideD = Infinity;
+          for (var a = 0; a < blk.jp2.anchors.length; a++) {
+            var an = blk.jp2.anchors[a];
+            if (!an.el || an.si < 0) continue;
+            var ar = an.el.getBoundingClientRect();
+            if (!ar.width) continue;
+            var adx = cx - (ar.left + ar.right) / 2, ady = cy - (ar.top + ar.bottom) / 2;
+            var ad = adx * adx + ady * ady;
+            if (cx >= ar.left - 4 && cx <= ar.right + 4 && cy >= ar.top - 4 && cy <= ar.bottom + 4) {
+              if (ad < insideD) { insideD = ad; inside = an; }
+            }
+            if (ad < bestAD) { bestAD = ad; bestA = an; }
+          }
+          var hitA = inside || bestA;
+          if (hitA) return { si: hitA.si, k: svgIndexOfScore(hitA.si), src: '简谱' };
+          return null;
+        }
+        return null;
+      }
+
+      // 事件接线：委托在 #svgHost 上（host 元素不重建、只换子内容，一次绑定长期有效）。
+      (function wireScoreSeek() {
+        var host = hostEl();
+        if (!host || !host.addEventListener) return;
+        host.addEventListener('click', function (ev) {
+          try {
+            if (window.KB_NO_SCORE_SEEK) return;              // 外部页面可禁用
+            if (playing || exporting) return;                 // 仅暂停态允许定位
+            if (STG && STG.on) return;                        // 录制中不打扰
+            if (document.body.classList.contains('rec-mode')) return;
+            if (!notes.length || !flowReady) return;
+            var hit = scoreHitFromPoint(ev.clientX, ev.clientY, ev.target);
+            if (!hit) return;
+            if (seekToScoreIndex(hit.si)) {
+              try { ev.preventDefault(); } catch (eP) { }
+            }
+          } catch (eW) { try { console.warn('[定位] 点击处理失败', eW); } catch (eL) { } }
+        });
+      })();
+
       function readSvgFiles(files) {
         if (!files || !files.length) return;
         var host = hostEl();
@@ -6358,6 +7720,7 @@
       try {
         window.__dbg = {
           blocks: function () { return blocks; },
+          pages: function () { return pendingPages; },
           bars: jpBarFracs,
           span: measureSpan,
           score: function () { return score; },
@@ -6377,6 +7740,29 @@
           jpTarget: jpNoteFrac,
           jpAt: positionSvgCursorAt,
           importFiles: loadImportedFiles,
+          shootJianpu: shootJianpu,
+          shootScore: shootScore,
+          jpBitmaps: function () { return jpBitmaps; },
+          exportSong: function (opts) { return exportSongFile(opts); },
+          collectSong: function () { return collectSongData(); },
+          jp2Rich: function () { return jp2Rich; },
+          jianpuKeyName: jianpuKeyName,
+          jp2Arcs: function (bi) {
+            var b = blocks[bi]; if (!b || !b.jp2) return null;
+            var F = Math.max(9, Math.min(30, b.jp2.w * 0.026));
+            var out = [];
+            (b.jp2.rows || []).forEach(function (row) {
+              var arcs = jp2CollectArcs(b, bi, row.cols, F, 0.30 * F, 0.075 * F);
+              arcs.forEach(function (a) {
+                out.push({ part: row.part, kind: a.kind, label: a.label || '', fromDeg: a.from.degree, toDeg: a.to.degree,
+                  fromMnum: a.from.mnum, toMnum: a.to.mnum, x0: +a.x0.toFixed(1), x1: +a.x1.toFixed(1),
+                  apexDist: +a.apexDist.toFixed(1), sameRow: a.sameRow,
+                  fTop: +((a.from.topExt || 0) - (a.from.vOff || 0)).toFixed(1),
+                  tTop: +((a.to.topExt || 0) - (a.to.vOff || 0)).toFixed(1) });
+              });
+            });
+            return out;
+          },
           // 音符组（播放框 / 简谱高亮按组推进）
           groups: function () { return GROUPS; },
           svgMap: function () { return svgScoreMap; },
@@ -6699,7 +8085,7 @@
           version: DATA_VERSION,
           createdAt: new Date().toISOString(),
           label: curLabel || '',
-          title: (scoreMeta && scoreMeta.title) || '',
+          title: (scoreMeta && scoreMeta.title) || (score && score.title) || '',
           total: total,
           legend: curLegend || [],
           notes: notes.map(function (n) {
@@ -6733,6 +8119,8 @@
             : null,
           svgPages: pages,
           efData: ef,
+          // jp2 简谱：导出原始 MusicXML，播放器用同一套 jp2 渲染器重建（efData 已不再使用）。
+          musicxml: jp2SourceText || '',
           settings: {
             full88: !!fullChk.checked,
             labels: !!labelChk.checked,
@@ -6754,7 +8142,10 @@
         opts = opts || {};
         if (!notes.length) return null;
         var data = collectSongData();
-        var js = '/* 键盘播放器数据 —— 由 keyboard-svg-vertical.html 的「导出数据 JS」生成。\n' +
+        var jpDesc = data.musicxml
+          ? 'MusicXML ' + Math.round(data.musicxml.length / 1024) + 'KB（播放器据此重建简谱）'
+          : data.efData.length + ' 节(efData)';
+        var js = '/* 键盘播放器数据 —— 由 歌曲生成器.html 的「导出数据 JS」生成。\n' +
           '   用法：存到 keyboard-player.html 旁边即可（播放页默认读 song.data.js），\n' +
           '   或者直接把本文件拖进播放页。\n' +
           '   键盘位置/高度：改 settings.keyboardLift（上移 px）/ settings.keyboardHeight（琴键高 px），\n' +
@@ -6762,7 +8153,7 @@
           '   window.KB_EXPORT_LIFT_PX / window.KB_EXPORT_KEY_H 里改。\n' +
           '   曲目：' + String(data.title || data.label || '').replace(/\*\//g, '* /') +
           ' · 音符 ' + data.notes.length + ' · 谱面 ' + (data.score ? data.score.notes.length : 0) +
-          ' · SVG ' + data.svgPages.length + ' 页 · 简谱 ' + data.efData.length + ' 节 */\n' +
+          ' · SVG ' + data.svgPages.length + ' 页 · 简谱 ' + jpDesc + ' */\n' +
           'window.KEYBOARD_DATA = ' + jsonForScript(data) + ';\n';
         return {
           data: data,
@@ -6790,7 +8181,7 @@
         try {
           console.log('[导出数据] ' + out.name + '  ' + Math.round(out.js.length / 1024) + ' KB' +
             '（音符 ' + out.data.notes.length + '，谱面 ' + (out.data.score ? out.data.score.notes.length : 0) +
-            '，SVG ' + out.data.svgPages.length + ' 页，简谱 ' + out.data.efData.length + ' 节）');
+            '，SVG ' + out.data.svgPages.length + ' 页，简谱 ' + (out.data.musicxml ? 'MusicXML ' + Math.round(out.data.musicxml.length / 1024) + 'KB' : out.data.efData.length + ' 节(efData)') + '）');
         } catch (e) { }
         return out;
       }
@@ -6889,6 +8280,8 @@
         if (data.efData && data.efData.length) {
           for (i = 0; i < data.efData.length; i++) window.efData.push(data.efData[i]);
         }
+        // jp2 简谱：导出文件携带原始 MusicXML 时用同一套渲染器重建（优先于 efData）。
+        try { jp2Prepare(data.musicxml || ''); } catch (eJp) { jp2Rich = null; }
 
         // 2) 谱面（MusicXML 解析结果）
         scoreMeta = data.scoreMeta || null;
@@ -7530,6 +8923,7 @@
           var py = oy + ps.staff.y + byTop * sx;
           var ph = Math.max(6, (byBot - byTop) * sx);
           var pw = Math.max(8, 70 * sc * sx);
+          // 五线谱红框（只覆盖五线谱，不再延长）
           c.beginPath();
           stgRound(c, px - pw / 2, py, pw, ph, 4, 4);
           c.fillStyle = 'rgba(217, 43, 37, .18)';
@@ -7537,6 +8931,47 @@
           c.lineWidth = Math.max(1.5, pw * 0.14);
           c.strokeStyle = 'rgba(217, 43, 37, .88)';
           c.stroke();
+          // 简谱蓝框：与五线谱框切分开、颜色区分；高度 = 当前小节在所有声部内的内容高度（用户要求 m01232 / m01431 / m01475）
+          if (blk.jp2 && ps.jp) {
+            var jpy = oy + ps.jp.y;
+            var jph = Math.max(6, ps.jp.h);
+            try {
+              var ancRec = blk.jp2.bySi ? blk.jp2.bySi[scoreOfSvg(curNoteGeo.idx)] : null;
+              var recMnum = null;
+              if (ancRec && ancRec.col && ancRec.col.members) {
+                for (var rmi = 0; rmi < ancRec.col.members.length; rmi++) {
+                  if (ancRec.col.members[rmi].mnum != null) { recMnum = ancRec.col.members[rmi].mnum; break; }
+                }
+              }
+              if (recMnum != null && blk.jp2.anchors && blk.jpEl) {
+                var jrR = blk.jpEl.getBoundingClientRect();
+                var jpScY = ps.jp.h / (blk.jpEl.offsetHeight || ps.jp.h);
+                var rmTop = Infinity, rmBot = -Infinity;
+                for (var rai = 0; rai < blk.jp2.anchors.length; rai++) {
+                  var ran = blk.jp2.anchors[rai];
+                  if (!ran.col || !ran.col.members || !ran.el) continue;
+                  var rIn = false;
+                  for (var rmj = 0; rmj < ran.col.members.length; rmj++) {
+                    if (ran.col.members[rmj].mnum === recMnum) { rIn = true; break; }
+                  }
+                  if (!rIn) continue;
+                  var rar = ran.el.getBoundingClientRect();
+                  if (rar.top < rmTop) rmTop = rar.top;
+                  if (rar.bottom > rmBot) rmBot = rar.bottom;
+                }
+                if (isFinite(rmTop) && isFinite(rmBot)) {
+                  jpy = oy + ps.jp.y + (rmTop - jrR.top) * jpScY;
+                  jph = Math.max(6, (rmBot - rmTop) * jpScY);
+                }
+              }
+            } catch (eJpRec) { }
+            c.beginPath();
+            stgRound(c, px - pw / 2, jpy, pw, jph, 4, 4);
+            c.fillStyle = 'rgba(47, 129, 247, .18)';
+            c.fill();
+            c.strokeStyle = 'rgba(47, 129, 247, .88)';
+            c.stroke();
+          }
         }
 
         c.restore();
@@ -8238,8 +9673,50 @@
         },
         // 音频上下文状态：'running' 表示已经解除「必须点一下才出声」的限制
         audioState: function () { return ac ? String(ac.state || '') : ''; },
+        // 点击谱面定位 / 程序化定位（暂停态）：si = MusicXML 音符下标（0 基）；g = 组号。
+        // 定位后点「播放」即从该处续播。
+        seekToNote: seekToScoreIndex,
+        seekToGroup: function (g) { return seekToGroup(g); },
+        seekState: function () {
+          var midis = [];
+          if (gPtr >= 0 && GROUPS && GROUPS.list[gPtr] && score && score.notes) {
+            var ms = GROUPS.list[gPtr].members, seen = {};
+            for (var i = 0; i < ms.length; i++) {
+              var r = score.notes[ms[i]];
+              if (r && typeof r.halfTone === 'number' && !seen[r.halfTone]) { seen[r.halfTone] = 1; midis.push(r.halfTone); }
+            }
+          }
+          return {
+            playing: playing,
+            time: (playing && ac && startTime > 0) ? Math.max(0, ac.currentTime - startTime) : playFromTime,
+            from: playFromTime,
+            group: gPtr,
+            groups: GROUPS ? GROUPS.list.length : 0,
+            measure: (gPtr >= 0 && GROUPS && GROUPS.list[gPtr]) ? GROUPS.list[gPtr].measure + 1 : 0,
+            total: total,
+            groupMidis: midis.sort(function (a, b) { return a - b; })
+          };
+        },
+        // 供外部校验：取某音符的屏幕位置（五线谱符头中心 / 简谱锚点块中心），用于模拟点击
+        noteRect: function (si) {
+          var k = svgIndexOfScore(si);
+          var out = { si: si, k: k, svg: null, jp: null };
+          if (k >= 0 && svgFlat[k] && svgFlat[k].el) {
+            var r = svgFlat[k].el.getBoundingClientRect();
+            out.svg = { x: r.left + r.width / 2, y: r.top + r.height / 2, w: r.width, h: r.height };
+          }
+          var b = blockOfScore(si);
+          if (b >= 0 && blocks[b] && blocks[b].jp2 && blocks[b].jp2.bySi) {
+            var an = blocks[b].jp2.bySi[si];
+            if (an && an.el) {
+              var r2 = an.el.getBoundingClientRect();
+              out.jp = { x: r2.left + r2.width / 2, y: r2.top + r2.height / 2, w: r2.width, h: r2.height };
+            }
+          }
+          return out;
+        },
         // 把「作品信息」的抬头原样导出一份：导出时随请求发给服务端，录制页拿到后再套上去。
-        // （编辑页和录制页可能不同源 —— 比如页面是 file:// 打开的、录制页是 http://127.0.0.1:8127/ ——
+        // （编辑页和录制页可能不同源 —— 比如页面是 file:// 打开的、录制页是 http://127.0.0.1:8227/ ——
         //   localStorage 不互通，光靠存档录制页看不到集合/副标题/字号）
         headPayload: function () {
           var e = headEdits.songs[headSongKey()] || {};

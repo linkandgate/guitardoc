@@ -4,7 +4,7 @@
 
    注意：fontLoadData 必须是「数组」，每项 { name, url, weight }，url 是相对字体根目录的路径。
    换 CDN 只改下面的 fontRootList，不要动这个数组。 */
-window.fontLoadData = [{"name":"CommonLight","url":"noto_sans_sc_light/noto_sans_sc_light.woff2","weight":"normal"},{"name":"CommonLight","url":"noto_sans_sc_light/noto_sans_sc_light-transformed-bold.woff2","weight":"bold"},{"name":"CommonSerif","url":"uming_cn_dotfix/uming_cn_dotfix.woff2","weight":"normal"},{"name":"CommonSerif","url":"uming_cn_dotfix/uming_cn_dotfix-transformed-bold.woff2","weight":"bold"},{"name":"CommonBlack","url":"wqy_microhei/wqy_microhei.woff2","weight":"normal"},{"name":"Roman","url":"roman/roman.woff2","weight":"normal"},{"name":"Roman","url":"roman/roman-transformed-bold.woff2","weight":"bold"},{"name":"RomanItalic","url":"roman_italic/roman_italic.woff2","weight":"normal"},{"name":"SparksNMN-EOPNumber","url":"eop_number/eop_number.ttf","weight":"normal"},{"name":"SparksNMN-mscore-20","url":"mscore-20/mscore-20.ttf","weight":"normal"},{"name":"SparksNMN-Bravura","url":"bravura/bravura.woff","weight":"normal"}]
+window.fontLoadData = [{"name":"Roman","url":"roman/roman.woff2","weight":"normal"},{"name":"Roman","url":"roman/roman-transformed-bold.woff2","weight":"bold"},{"name":"RomanItalic","url":"roman_italic/roman_italic.woff2","weight":"normal"},{"name":"SparksNMN-EOPNumber","url":"eop_number/eop_number.ttf","weight":"normal"},{"name":"SparksNMN-mscore-20","url":"mscore-20/mscore-20.ttf","weight":"normal"},{"name":"SparksNMN-Bravura","url":"bravura/bravura.woff","weight":"normal"}]
 
 /* ===== 字体源：强制 CDN =====
    @font-face 的 src 会把这些地址全部列出来，浏览器按顺序尝试，哪个能下载成功就用哪个。
@@ -19,7 +19,7 @@ window.fontRootList = [
 ];
 
 /* 兼容旧变量：引擎在没有 fontRootList 时才读它们，这里也指向 CDN，保持一致 */
-window.fontLocalRoot = window.fontRootList[0];
+//window.fontLocalRoot = window.fontRootList[0];
 window.fontCdnRoot = '';
 
 /* 提前和 CDN 建立连接（省掉一次 TLS 握手，字体能早 100~300ms 开始下载）。

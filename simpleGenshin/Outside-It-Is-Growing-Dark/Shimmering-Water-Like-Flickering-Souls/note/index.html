@@ -5536,12 +5536,18 @@
 
 <p><a href="https://pan.baidu.com/s/1id0JrxitiSnNLb7ugOhKjA?pwd=3ygw" target="_blank">对应的高清简谱、五线谱，图片、pdf资源</a></p>
 <hr />
+<style>
+  /* 简谱显示开关：只影响本页打印/播放视图，不改引擎 */
+  #svgHost.hide-jp .flowJp { display: none !important; }
+</style>
+
 <div class="kb-md" id="kbMd" data-song="../song.data.js">
   <div id="app">
     <div class="stage">
       <div class="topbar">
         <button class="btn primary" id="playBtn" disabled>播放</button>
         <button class="btn" id="restartBtn" disabled>重播</button>
+        <button class="btn" id="jpToggleBtn" title="切换简谱显示：五线谱+简谱 / 仅五线谱">隐藏简谱</button>
         <label class="chk" id="startMeasRow" title="从指定小节开始播放（需要数据里带 MusicXML 谱面）">从第
           <select id="startMeas" disabled>
             <option value="1">1</option>
@@ -5563,6 +5569,25 @@
     </div>
   </div>
 </div>
+<script>
+    // 简谱显示开关：在 #svgHost 上挂 hide-jp 类隐藏 .flowJp（五线谱保留）。
+    // 类挂在宿主上，引擎重排（resize/竖屏自适应）重建 .flowJp 后开关状态依然生效。
+    (function () {
+      var btn = document.getElementById('jpToggleBtn');
+      var host = document.getElementById('svgHost');
+      if (!btn || !host) return;
+      function refresh() {
+        var hidden = host.classList.contains('hide-jp');
+        btn.textContent = hidden ? '显示简谱' : '隐藏简谱';
+        btn.title = hidden ? '当前仅五线谱，点击显示五线谱+简谱' : '当前五线谱+简谱，点击隐藏简谱';
+      }
+      btn.addEventListener('click', function () {
+        host.classList.toggle('hide-jp');
+        refresh();
+      });
+      refresh();
+    })();
+  </script>
 
 
 
